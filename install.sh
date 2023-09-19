@@ -14,8 +14,9 @@ sudo systemctl enable avahi-daemon
 sudo systemctl enable acpid
 
 #Sources.list
-sudo chmod +x $HOME/installer/sourceslist.sh
-sh $HOME/installer/sourceslist.sh
+sudo chmod +x $HOME/installer/installation_files/sourceslist.sh
+sh $HOME/installer/installation_files/sourceslist.sh
+sudo apt update
 
 #Ly
 cd && mkdir -p software/ly && cd software/ly/
@@ -24,6 +25,12 @@ git clone --recurse-submodules https://github.com/fairyglade/ly
 make
 sudo make install installsystmd
 sudo systemctl enable ly.service
+
+#Software
+sudo apt install $(cat $HOME/installer/installation_files/pkglist | perl -pe 's|\n| |g') -y
+
+#Pfetch
+#Hitta install script
 
 #Picom
 #Hitta korrekt version
