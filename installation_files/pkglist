@@ -1,40 +1,7 @@
-fish 
-rofi 
-sxhkd 
-zathura 
-spotify-client 
-feh 
-brave-browser
-unzip
-dunst
-yubioath-desktop
-signal-desktop
-ristretto
-tty-clock-git
-samba
-fd
-fzf
-ytfzf
-ueberzug
-curl
-yt-dlp
-mpv
-thunar
-cava
-mpd
-ncmpcpp
-exa
-htop
-pulseaudio
-alsa-utils
-pavucontrol
-volumeicon-alsa
-cups
-bluez
-blueman
-numlockx
-libnotify-bin
-policykit-1-gnome
-scrot
-mousepad
-
+dunst cava rofi ueberzug libnotify-bin \
+spotify-client feh ristretto mpv ncmpcpp ytfzf yt-dlp \
+brave-browser yubiauth-desktop signal-desktop \
+thunar zathura scrot mousepad fish tty-clock samba \
+curl htop exa unzip fzf fd sxhkd cups bluez blueman \
+numlockx policikit-1-gnome pulseaudio alsa-utils \
+pavucontrol volumeicon-alsa

@@ -4,11 +4,7 @@
 echo 'Scooby Debian/DWM installation script'
 
 #Base installation
-sudo apt install -y \
-	xorg xbacklight xbindkeys xvkbd xinput xorg-dev \
-	build-essential intel-microcode network-manager-gnome \
-	lxappearance dialog mtools dosfstools avahi-daemon acpi \
-	acpid gvfs-ba ckends xfce4-power-manager
+sudo apt install $(cat $HOME/installer/installation_files/-y
 
 sudo systemctl enable avahi-daemon
 sudo systemctl enable acpid
@@ -27,12 +23,18 @@ sudo make install installsystmd
 sudo systemctl enable ly.service
 
 #Software
-sudo apt install $(cat $HOME/installer/installation_files/pkglist | perl -pe 's|\n| |g') -y
-
+sudo apt install $(cat $HOME/installer/installation_files/pkglist) -y
 sudo systemctl enable bluetooth
 sudo systemctl enable cups
 
+# Nvim
+sudo chmod +x $HOME/installer/installation_files/nvim.sh
+sh $HOME/installer/installation_files/nvim.sh
+
 #getNF
+# launch getNF
+#sudo apt install sudo apt install -y fonts-recommended fonts-ubuntu fonts-font-awesome fonts-terminus
+# fc-cache -f -v
 
 #Pfetch
 #Hitta install script
@@ -60,25 +62,8 @@ Type=Xsession
 EOF
 sudo cp ./temp /usr/share/xsessions/dwm.desktop;rm ./temp
 
-#SUCKLESS
-#cd && mkdir $HOME/.config/suckless && cd $HOME/.config/suckless/
-#tools=( "dwm" "dmenu" "st" "slstatus" "slock" "tabbed" )
-#for tool in ${tools[@]}
-#do
-#	git clone git://git.suckless.org/$tool
-#	cd $HOME/.config/suckless/$tool;make;sudo make clean install;cd ..
-#done
-#
-#cd && rm -rf $HOME/.config/suckless/
-
-# SYMLINK SUCKLESS
-# MAKE CLEAN INSTALL
-
-# SYMLINK
-# SYMLINK DOC
-
-
-
+# Symlink
+cd $HOME/dotfiles/.config/suckless/dwm/ && sudo make clean install
 
 #Installer Removal
 cd && rm -rf $HOME/XXXXX
