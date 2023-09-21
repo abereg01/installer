@@ -1,5 +1,4 @@
 #!/bin/bash
-
 echo 'Scooby installation script'
 
 mkdir $HOME/.config/ $HOME/scripts/ $HOME/downloads
