@@ -140,10 +140,16 @@ sh $HOME/installer/installation_files/sourceslist.sh
 sudo apt update 
 sudo apt install $(cat $HOME/installer/installation_files/prop_software) -y
 
+echo '#############################'
+echo '#        getNF Fonts        #'
+echo '#############################'
+
+cd $HOME/scripts/getnf && ./getnf &&
+rm -rf $HOME/NerdFonts
+
 #Installer Removal
 cd && rm -rf $HOME/installer/
 clear
-# git clone https://github.com/abereg01/
 echo '#################################'
 echo '# Installation done. Rebooting. #'
 echo '#################################'
