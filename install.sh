@@ -1,11 +1,17 @@
 #!/bin/bash
-echo 'Scooby installation script'
+clear
+echo '##############################'
+echo '# Scooby installation script #'
+echo '##############################'
+sleep 3
 
 mkdir $HOME/.config/ $HOME/scripts/ $HOME/downloads
 
 # Base installation
 clear
-echo 'Installing Base System'
+echo '############################'
+echo '#  Installing Base System  #'
+echo '############################'
 sleep 3
 sudo apt install $(cat $HOME/installer/installation_files/base) curl wget -y
 sudo systemctl enable avahi-daemon &
@@ -19,7 +25,7 @@ sudo chmod +x $HOME/installer/installation_files/sourceslist.sh &
 sh $HOME/installer/installation_files/sourceslist.sh 
 sudo apt update 
 
-!!# Ly
+# Ly
 clear
 echo 'Installing Ly'
 sleep 3
@@ -32,7 +38,7 @@ make
 sudo make install installsystemd
 sudo systemctl enable ly.service
 
-!!# Software
+# Software
 #clear
 echo 'Installing Software'
 sleep 3
@@ -102,10 +108,10 @@ echo 'Creating Symlinks'
 sleep 3
 git clone https://github.com/abereg01/dotfiles.git
 ln -s $HOME/dotfiles/.config/* $HOME/.config/
-ln -s $HOME/dotfiles/scripts/ $HOME/scripts
+ln -s $HOME/dotfiles/scripts/* $HOME/scripts/
 
 #Installer Removal
-#cd && rm -rf $HOME/installer/
+cd && rm -rf $HOME/installer/
 #clear
 echo 'Installation done. Rebooting.'
 sleep 2
