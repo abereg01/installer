@@ -19,7 +19,7 @@ sudo chmod +x $HOME/installer/installation_files/sourceslist.sh &
 sh $HOME/installer/installation_files/sourceslist.sh 
 sudo apt update 
 
-# Ly
+!!# Ly
 clear
 echo 'Installing Ly'
 sleep 3
@@ -32,7 +32,7 @@ make
 sudo make install installsystemd
 sudo systemctl enable ly.service
 
-# Software
+!!# Software
 clear
 echo 'Installing Software'
 sleep 3
