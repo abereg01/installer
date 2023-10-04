@@ -130,18 +130,20 @@ chsh -s `which fish`
 
 # Prop Software
 #clear
-#echo 'Adding Sources'
-#sleep 3
-#chmod +x $HOME/installer/installation_files/sourceslist.sh &
-#sh $HOME/installer/installation_files/sourceslist.sh 
+echo '#############################'
+echo '# Installing Prop. Software #'
+echo '#############################'
+sleep 3
+chmod +x $HOME/installer/installation_files/sourceslist.sh &
+sh $HOME/installer/installation_files/sourceslist.sh 
 
-#sudo apt update 
+sudo apt update 
 sudo apt install $(cat $HOME/installer/installation_files/prop_software) -y
 
 #Installer Removal
 cd && rm -rf $HOME/installer/
 clear
-# git clone https://github.com/abereg01
+# git clone https://github.com/abereg01/
 echo '#################################'
 echo '# Installation done. Rebooting. #'
 echo '#################################'
