@@ -106,4 +106,6 @@ ln -s $HOME/dotfiles/scripts/ $HOME/scripts
 #Installer Removal
 #cd && rm -rf $HOME/installer/
 clear
-echo 'Installation done. Reboot.'
+echo 'Installation done. Rebooting.'
+sleep 2
+sudo reboot
