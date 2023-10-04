@@ -1,4 +1,1 @@
-xorg xbacklight xbindkeys xvkbd xinput xorg-dev \
-build-essential intel-microcode network-manager-gnome \
-lxappearance dialog mtools dosfstools avahi-daemon acpi \
-acpid gvfs-ba ckends xfce4-power-manager
+xorg xbacklight xbindkeys xvkbd xinput xorg-dev build-essential intel-microcode network-manager-gnome lxappearance dialog mtools dosfstools avahi-daemon acpi acpid gvfs-backends xfce4-power-manager
