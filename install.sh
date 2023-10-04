@@ -97,6 +97,17 @@ echo '############################'
 sleep 3
 cd && git clone https://github.com/abereg01/wallpapers.git
 
+# Symlink
+clear
+echo '############################'
+echo '#     Creating Symlinks    #'
+echo '############################'
+sleep 3
+git clone https://github.com/abereg01/dotfiles.git
+ln -s $HOME/dotfiles/.config/* $HOME/.config/
+ln -s $HOME/dotfiles/scripts/* $HOME/scripts/
+ln -s $HOME/dotfiles/.local/share/dwm/ $HOME/.local/share/
+
 #Xsession & DWM
 clear
 echo '############################'
@@ -119,15 +130,7 @@ sudo cp ./temp /usr/share/xsessions/dwm.desktop;rm ./temp
 
 cd $HOME/dotfiles/.config/suckless/dwm/ && sudo make clean install
 
-# Symlink
-clear
-echo '############################'
-echo '#     Creating Symlinks    #'
-echo '############################'
-sleep 3
-git clone https://github.com/abereg01/dotfiles.git
-ln -s $HOME/dotfiles/.config/* $HOME/.config/
-ln -s $HOME/dotfiles/scripts/* $HOME/scripts/
+chsh -s `which fish`
 
 #Installer Removal
 cd && rm -rf $HOME/installer/
