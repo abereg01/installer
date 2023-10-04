@@ -5,7 +5,6 @@ mkdir $HOME/.config/ $HOME/scripts/ $HOME/downloads
 
 # Base installation
 sudo apt install $(cat $HOME/installer/installation_files/base) curl wget -y
-wait
 sudo systemctl enable avahi-daemon &
 sudo systemctl enable acpid
 
