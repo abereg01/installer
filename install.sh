@@ -109,20 +109,6 @@ clear
 echo '############################'
 echo '#      Installing DWM      #'
 echo '############################'
-if [[ ! -d /usr/share/xsessions ]]; then
-       sudo mkdir /usr/share/xsessions
-fi
-
-cat > ./temp << "EOF"
-[Desktop Entry]
-Encoding=UTF-8
-Name=dwm
-Comment=Dynamic window manager
-Exec=dwm
-Icon=dwm
-Type=Xsession
-EOF
-sudo cp ./temp /usr/share/xsessions/dwm.desktop;rm ./temp
 
 cd $HOME/dotfiles/.config/suckless/dwm/ && sudo make clean install
 
