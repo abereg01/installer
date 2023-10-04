@@ -17,14 +17,6 @@ sudo apt install $(cat $HOME/installer/installation_files/base) curl wget -y
 sudo systemctl enable avahi-daemon &
 sudo systemctl enable acpid
 
-# Sources.list
-#clear
-#echo 'Adding Sources'
-#sleep 3
-#sudo chmod +x $HOME/installer/installation_files/sourceslist.sh &
-#sh $HOME/installer/installation_files/sourceslist.sh 
-#sudo apt update 
-
 # Ly
 clear
 echo '############################'
@@ -135,7 +127,16 @@ sudo cp ./temp /usr/share/xsessions/dwm.desktop;rm ./temp
 cd $HOME/dotfiles/.config/suckless/dwm/ && sudo make clean install
 
 chsh -s `which fish`
-sudo ufw allow 3389/tcp
+
+# Prop Software
+#clear
+#echo 'Adding Sources'
+#sleep 3
+#chmod +x $HOME/installer/installation_files/sourceslist.sh &
+#sh $HOME/installer/installation_files/sourceslist.sh 
+
+#sudo apt update 
+sudo apt install $(cat $HOME/installer/installation_files/prop_software) -y
 
 #Installer Removal
 cd && rm -rf $HOME/installer/
