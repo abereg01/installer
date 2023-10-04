@@ -131,10 +131,12 @@ sudo cp ./temp /usr/share/xsessions/dwm.desktop;rm ./temp
 cd $HOME/dotfiles/.config/suckless/dwm/ && sudo make clean install
 
 chsh -s `which fish`
+sudo ufw allow 3389/tcp
 
 #Installer Removal
 cd && rm -rf $HOME/installer/
 clear
+# git clone https://github.com/abereg01
 echo '#################################'
 echo '# Installation done. Rebooting. #'
 echo '#################################'
