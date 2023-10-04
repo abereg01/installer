@@ -87,7 +87,12 @@ rm master.zip
 #Hitta korrekt version
 
 #Starship
-#curl -sS https://starship.rs/install.sh | sh
+clear
+echo '############################'
+echo '#    Installing Starship   #'
+echo '############################'
+sleep 3
+curl -sS https://starship.rs/install.sh | sh
 
 # Wallpapers
 clear
