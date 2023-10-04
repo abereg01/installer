@@ -1,6 +1,6 @@
 #!/bin/bash
 #Build prerequisites
-sudo apt install ninja-build gettext cmake
+sudo apt install ninja-build gettext cmake -y
 
 # clone
 cd $HOME/software
