@@ -33,15 +33,16 @@ sudo make install installsystemd
 sudo systemctl enable ly.service
 
 !!# Software
-clear
+#clear
 echo 'Installing Software'
 sleep 3
 sudo apt install $(cat $HOME/installer/installation_files/pkglist) -y
+
 sudo systemctl enable bluetooth
 sudo systemctl enable cups
 
 # Fonts & getNF
-clear
+#clear
 echo 'Installing fonts'
 sleep 3
 sudo apt install -y fonts-recommended \
@@ -49,14 +50,14 @@ fonts-ubuntu fonts-font-awesome fonts-terminus
 fc-cache -f -v
 
 # Nvim
-clear
+#clear
 echo 'Installing Nvim'
 sleep 3
 sudo chmod +x $HOME/installer/installation_files/nvim.sh
 sh $HOME/installer/installation_files/nvim.sh
 
 # Pfetch
-clear
+#clear
 echo 'Installing Pfetch'
 sleep 3
 wget https://github.com/dylanaraps/pfetch/archive/master.zip
@@ -72,7 +73,7 @@ rm master.zip
 #curl -sS https://starship.rs/install.sh | sh
 
 # Wallpapers
-clear
+#clear
 echo 'Downloading Wallpapers'
 sleep 3
 cd && git clone https://github.com/abereg01/wallpapers.git
@@ -96,7 +97,7 @@ sudo cp ./temp /usr/share/xsessions/dwm.desktop;rm ./temp
 cd $HOME/dotfiles/.config/suckless/dwm/ && sudo make clean install
 
 # Symlink
-clear
+#clear
 echo 'Creating Symlinks'
 sleep 3
 git clone https://github.com/abereg01/dotfiles.git
@@ -105,7 +106,7 @@ ln -s $HOME/dotfiles/scripts/ $HOME/scripts
 
 #Installer Removal
 #cd && rm -rf $HOME/installer/
-clear
+#clear
 echo 'Installation done. Rebooting.'
 sleep 2
 sudo reboot
