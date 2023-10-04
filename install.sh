@@ -18,16 +18,18 @@ sudo systemctl enable avahi-daemon &
 sudo systemctl enable acpid
 
 # Sources.list
-clear
-echo 'Adding Sources'
-sleep 3
-sudo chmod +x $HOME/installer/installation_files/sourceslist.sh &
-sh $HOME/installer/installation_files/sourceslist.sh 
-sudo apt update 
+#clear
+#echo 'Adding Sources'
+#sleep 3
+#sudo chmod +x $HOME/installer/installation_files/sourceslist.sh &
+#sh $HOME/installer/installation_files/sourceslist.sh 
+#sudo apt update 
 
 # Ly
 clear
-echo 'Installing Ly'
+echo '############################'
+echo '#       Installing Ly      #'
+echo '############################'
 sleep 3
 cd && mkdir software/ && cd software/
 sudo apt install -y libpam0g-dev libxcb-xkb-dev
@@ -39,32 +41,41 @@ sudo make install installsystemd
 sudo systemctl enable ly.service
 
 # Software
-#clear
-echo 'Installing Software'
+clear
+echo '############################'
+echo '#    Installing Software   #'
+echo '############################'
 sleep 3
+sudo apt update
 sudo apt install $(cat $HOME/installer/installation_files/pkglist) -y
 
 sudo systemctl enable bluetooth
 sudo systemctl enable cups
 
 # Fonts & getNF
-#clear
-echo 'Installing fonts'
+clear
+echo '############################'
+echo '#     Installing fonts     #'
+echo '############################'
 sleep 3
 sudo apt install -y fonts-recommended \
 fonts-ubuntu fonts-font-awesome fonts-terminus
 fc-cache -f -v
 
 # Nvim
-#clear
-echo 'Installing Nvim'
+clear
+echo '############################'
+echo '#      Installing Nvim     #'
+echo '############################'
 sleep 3
 sudo chmod +x $HOME/installer/installation_files/nvim.sh
 sh $HOME/installer/installation_files/nvim.sh
 
 # Pfetch
-#clear
-echo 'Installing Pfetch'
+clear
+echo '############################'
+echo '#     Installing Pfetch    #'
+echo '############################'
 sleep 3
 wget https://github.com/dylanaraps/pfetch/archive/master.zip
 unzip master.zip
@@ -79,12 +90,18 @@ rm master.zip
 #curl -sS https://starship.rs/install.sh | sh
 
 # Wallpapers
-#clear
-echo 'Downloading Wallpapers'
+clear
+echo '############################'
+echo '#  Downloading Wallpapers  #'
+echo '############################'
 sleep 3
 cd && git clone https://github.com/abereg01/wallpapers.git
 
-Xsession & DWM
+#Xsession & DWM
+clear
+echo '############################'
+echo '#      Installing DWM      #'
+echo '############################'
 if [[ ! -d /usr/share/xsessions ]]; then
        sudo mkdir /usr/share/xsessions
 fi
@@ -103,8 +120,10 @@ sudo cp ./temp /usr/share/xsessions/dwm.desktop;rm ./temp
 cd $HOME/dotfiles/.config/suckless/dwm/ && sudo make clean install
 
 # Symlink
-#clear
-echo 'Creating Symlinks'
+clear
+echo '############################'
+echo '#     Creating Symlinks    #'
+echo '############################'
 sleep 3
 git clone https://github.com/abereg01/dotfiles.git
 ln -s $HOME/dotfiles/.config/* $HOME/.config/
@@ -112,7 +131,9 @@ ln -s $HOME/dotfiles/scripts/* $HOME/scripts/
 
 #Installer Removal
 cd && rm -rf $HOME/installer/
-#clear
-echo 'Installation done. Rebooting.'
+clear
+echo '#################################'
+echo '# Installation done. Rebooting. #'
+echo '#################################'
 sleep 2
 sudo reboot
