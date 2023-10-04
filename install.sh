@@ -5,9 +5,8 @@ echo '# Scooby installation script #'
 echo '##############################'
 sleep 3
 
-mkdir $HOME/.config/ $HOME/scripts/ $HOME/downloads
-
 # Base installation
+mkdir $HOME/.config/ $HOME/scripts/ $HOME/downloads
 clear
 echo '############################'
 echo '#  Installing Base System  #'
@@ -39,19 +38,8 @@ echo '############################'
 sleep 3
 sudo apt update
 sudo apt install $(cat $HOME/installer/installation_files/pkglist) -y
-
 sudo systemctl enable bluetooth
 sudo systemctl enable cups
-
-# Fonts & getNF
-clear
-echo '############################'
-echo '#     Installing fonts     #'
-echo '############################'
-sleep 3
-sudo apt install -y fonts-recommended \
-fonts-ubuntu fonts-font-awesome fonts-terminus
-fc-cache -f -v
 
 # Nvim
 clear
@@ -125,8 +113,6 @@ EOF
 sudo cp ./temp /usr/share/xsessions/dwm.desktop;rm ./temp
 cd $HOME/dotfiles/.config/suckless/dwm/ && sudo make clean install
 
-chsh -s `which fish`
-
 # Prop Software
 #clear
 echo '#############################'
@@ -135,18 +121,24 @@ echo '#############################'
 sleep 3
 chmod +x $HOME/installer/installation_files/sourceslist.sh &
 sh $HOME/installer/installation_files/sourceslist.sh 
-
 sudo apt update 
 sudo apt install $(cat $HOME/installer/installation_files/prop_software) -y
 
-echo '#############################'
-echo '#        getNF Fonts        #'
-echo '#############################'
 
+# Fonts & getNF
+clear
+echo '############################'
+echo '#     Installing fonts     #'
+echo '############################'
+sleep 3
+sudo apt install -y fonts-recommended \
+fonts-ubuntu fonts-font-awesome fonts-terminus
+fc-cache -f -v
 cd $HOME/scripts/getnf && ./getnf &&
 rm -rf $HOME/NerdFonts
 
-#Installer Removal
+#Finishing
+chsh -s `which fish`
 cd && rm -rf $HOME/installer/
 clear
 echo '#################################'
