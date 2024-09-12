@@ -1,0 +1,14 @@
+change colors for installation
+
+starship prompt yes
+
+pre install iosevka, Hack, JetBrainsMono, Meslo
+cut out getdf
+
+yubikey
+
+chadwm empty
+
+flatpak install signal, spotify
+flatpak install flathub com.spotify.Client
+flatpak install flathub org.signal.Signal
