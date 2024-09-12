@@ -28,7 +28,7 @@ The installation process is divided into several scripts:
 
 1. Clone this repository:
    ```
-   git clone https://github.com/yourusername/void-linux-install.git
+   git clone https://github.com/abereg01/void/void-linux-install.git
    cd void-linux-install
    ```
 
