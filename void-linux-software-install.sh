@@ -10,6 +10,7 @@ install_additional_software() {
         thunar zathura scrot mousepad fish tty-clock samba curl htop exa unzip
         fzf sxhkd cups bluez blueman numlockx pulseaudio alsa-utils pavucontrol
         volumeicon fd neovim firefox thunderbird libreoffice gimp vlc git vim flatpak
+        bat eza zoxide
         # Packages for Apple Magic Trackpad support
         bluez-utils xf86-input-mtrack xf86-input-synaptics
     )
