@@ -28,13 +28,16 @@ install_display_manager() {
     sudo ln -s /etc/sv/slim /var/service/
 }
 
-# Function to install Pfetch
-install_pfetch() {
+# Function to install Rxfetch
+install_rxfetch() {
     print_message "Installing Pfetch"
-    wget https://github.com/dylanaraps/pfetch/archive/master.zip
-    unzip master.zip
-    sudo install pfetch-master/pfetch /usr/local/bin/
-    rm master.zip pfetch-master -rf
+    git clone https://github.com/mangeshrex/rxfetch
+    cd rxfetch
+    cp ttf-material-design-icons/* $HOME/.local/share/fonts
+    fc-cache -fv
+    sudo cp rxfetch /usr/local/bin
+    cd ..
+    rm -rf rxfetch
 }
 
 # Function to install Starship
@@ -45,5 +48,5 @@ install_starship() {
 
 install_additional_software
 install_display_manager
-install_pfetch
+install_rxfetch
 install_starship
