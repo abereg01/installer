@@ -7,10 +7,10 @@ install_additional_software() {
     print_message "Installing Additional Software"
     packages=(
         dunst cava rofi ueberzug libnotify feh ristretto mpv ncmpcpp ytfzf yt-dlp
-        thunar zathura scrot mousepad fish tty-clock samba curl htop exa unzip
+        thunar zathura scrot mousepad fish tty-clock samba curl htop eza unzip
         fzf sxhkd cups bluez blueman numlockx pulseaudio alsa-utils pavucontrol
         volumeicon fd neovim firefox thunderbird libreoffice gimp vlc git vim flatpak
-        bat eza zoxide
+        bat zoxide
         # Packages for Apple Magic Trackpad support
         bluez-utils xf86-input-mtrack xf86-input-synaptics
     )
