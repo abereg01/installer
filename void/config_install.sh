@@ -41,8 +41,8 @@ install_fonts() {
     sudo xbps-install -y font-adobe-source-code-pro font-awesome font-fira-ttf \
         font-ibm-plex-ttf noto-fonts-ttf
     fc-cache -f -v
-    cd "$HOME"/scripts/getnf && ./getnf
-    rm -rf "$HOME"/NerdFonts
+#    cd "$HOME"/scripts/getnf && ./getnf
+#    rm -rf "$HOME"/NerdFonts
 }
 
 download_wallpapers
