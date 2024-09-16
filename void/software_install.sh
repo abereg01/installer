@@ -30,7 +30,7 @@ install_additional_software() {
 
 # Function to install Rxfetch
 install_rxfetch() {
-    print_message "Installing Pfetch"
+    print_message "Installing Rxfetch"
     git clone https://github.com/mangeshrex/rxfetch
     cd rxfetch
     cp ttf-material-design-icons/* $HOME/.local/share/fonts
@@ -39,6 +39,13 @@ install_rxfetch() {
     cd ..
     rm -rf rxfetch
 }
+
+install_flatpak() {
+    print_message "Installing Flatpaks"
+    flatpak install flathub com.spotify.Client
+    flatpak install flathub org.signal.Signal
+}
+
 
 # Function to install Starship
 install_starship() {
