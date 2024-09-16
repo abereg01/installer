@@ -5,17 +5,17 @@ source ./utils.sh
 # Function to download wallpapers
 download_wallpapers() {
     print_message "Downloading Wallpapers"
-    git clone https://github.com/abereg01/wallpapers.git "$HOME"/wallpapers
+    git clone https://github.com/abereg01/wallpapers.git $HOME/wallpapers
 }
 
 # Function to setup dotfiles
 setup_dotfiles() {
     print_message "Setting up dotfiles"
-    git clone https://github.com/abereg01/dotfiles.git "$HOME"/dotfiles
-    ln -sf "$HOME"/dotfiles/.config/* "$HOME"/.config/
-    ln -sf "$HOME"/dotfiles/scripts/* "$HOME"/scripts/
-    mkdir -p "$HOME"/.local/share
-    ln -sf "$HOME"/dotfiles/.local/share/dwm/ "$HOME"/.local/share/
+    git clone https://github.com/abereg01/dotfiles.git $HOME/dotfiles
+    ln -sf $HOME/dotfiles/.config/* $HOME/.config/
+    ln -sf $HOME/dotfiles/scripts/* $HOME/scripts/
+    mkdir -p $HOME/.local/share
+    ln -sf $HOME/dotfiles/.local/share/dwm/ $HOME/.local/share/
 }
 
 # Function to install and configure DWM
@@ -27,9 +27,9 @@ install_dwm() {
 Encoding=UTF-8
 Name=dwm
 Comment=Dynamic window manager
-Exec=dwm
+Exec=$HOME/dotfiles/.config/chadwm/scripts/./run.sh
 Icon=dwm
-Type=Xsession
+Type=Application
 EOF
     sudo mv ./temp /usr/share/xsessions/dwm.desktop
     cd "$HOME"/dotfiles/.config/suckless/dwm/ && sudo make clean install
