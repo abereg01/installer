@@ -8,9 +8,9 @@ NC='\033[0m' # No Color
 
 # Function to print colored messages
 print_message() {
-    echo -e "${YELLOW}###########################${NC}"
-    echo -e "${GREEN}# $1 ${NC}"
-    echo -e "${YELLOW}###########################${NC}"
+    echo -e "${NNC}###########################${NC}"
+    echo -e "${RED}# $1 ${NC}"
+    echo -e "${NC}###########################${NC}"
     sleep 1
 }
 
@@ -26,5 +26,5 @@ install_package() {
 
 # Function to create directories
 create_directories() {
-    mkdir -p "$HOME"/.config "$HOME"/scripts "$HOME"/downloads "$HOME"/software
+    mkdir -p $HOME/.config $HOME/scripts $HOME/downloads $HOME/software
 }
