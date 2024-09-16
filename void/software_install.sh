@@ -22,11 +22,11 @@ install_additional_software() {
 }
 
 # Function to install and configure SLIM display manager
-install_display_manager() {
-    print_message "Installing Display Manager (SLIM)"
-    install_package "slim"
-    sudo ln -s /etc/sv/slim /var/service/
-}
+#install_display_manager() {
+#    print_message "Installing Display Manager (SLIM)"
+#    install_package "slim"
+#    sudo ln -s /etc/sv/slim /var/service/
+#}
 
 # Function to install Rxfetch
 install_rxfetch() {
@@ -47,6 +47,6 @@ install_starship() {
 }
 
 install_additional_software
-install_display_manager
+#install_display_manager
 install_rxfetch
 install_starship
