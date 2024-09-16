@@ -32,7 +32,7 @@ Icon=dwm
 Type=Application
 EOF
     sudo mv ./temp /usr/share/xsessions/dwm.desktop
-    cd "$HOME"/dotfiles/.config/suckless/dwm/ && sudo make clean install
+    cd $HOME/dotfiles/.config/suckless/dwm/ && sudo make clean install
 }
 
 # Function to install fonts
