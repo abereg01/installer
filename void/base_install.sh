@@ -7,8 +7,8 @@ install_base_system() {
     print_message "Installing Base System"
     sudo xbps-install -Syu
     sudo xbps-install -y xorg xbacklight xbindkeys xvkbd xinput xorg-server-devel base-devel \
-        linux-headers network-manager-applet lxappearance \
-        dialog mtools dosfstools avahi acpi acpid gvfs xfce4-power-manager curl wget
+        libXft-devel libX11-devel libXinerama-devel linux-headers network-manager-applet lxappearance \
+        freetype-devel fontconfig-devel dialog mtools dosfstools avahi acpi acpid gvfs xfce4-power-manager curl wget
 }
 
 create_directories
