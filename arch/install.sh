@@ -1,148 +1,265 @@
 #!/bin/bash
-clear
-echo '##############################'
-echo '# Scooby installation script #'
-echo '##############################'
-sleep 3
 
-# Base installation
-mkdir $HOME/.config/ $HOME/scripts/ $HOME/downloads
-clear
-echo '############################'
-echo '#  Installing Base System  #'
-echo '############################'
-sleep 3
-sudo apt install $(cat $HOME/installer/installation_files/base) curl wget -y
-sudo systemctl enable avahi-daemon &
-sudo systemctl enable acpid
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-# Ly
-clear
-echo '############################'
-echo '#       Installing Ly      #'
-echo '############################'
-sleep 3
-cd && mkdir software/ && cd software/
-sudo apt install -y libpam0g-dev libxcb-xkb-dev
-git clone --recurse-submodules https://github.com/fairyglade/ly
-cd ly/
-make
-sudo make install installsystemd
-sudo systemctl enable ly.service
+# Function to print colored output
+print_status() {
+    echo -e "${BLUE}[*]${NC} $1"
+}
 
-# Software
-clear
-echo '############################'
-echo '#    Installing Software   #'
-echo '############################'
-sleep 3
-sudo apt update
-sudo apt install $(cat $HOME/installer/installation_files/pkglist) -y
-sudo systemctl enable bluetooth
-sudo systemctl enable cups
+print_success() {
+    echo -e "${GREEN}[+]${NC} $1"
+}
 
-# Nvim
-clear
-echo '############################'
-echo '#      Installing Nvim     #'
-echo '############################'
-sleep 3
-sudo chmod +x $HOME/installer/installation_files/nvim.sh
-sh $HOME/installer/installation_files/nvim.sh
+print_error() {
+    echo -e "${RED}[-]${NC} $1"
+}
 
-# Pfetch
-clear
-echo '############################'
-echo '#     Installing Pfetch    #'
-echo '############################'
-sleep 3
-wget https://github.com/dylanaraps/pfetch/archive/master.zip
-unzip master.zip
-sudo install pfetch-master/pfetch /usr/local/bin/
-ls -l /usr/local/bin/pfetch
-rm master.zip
+# Function to check internet connection
+check_internet() {
+    print_status "Checking internet connection..."
+    if ! ping -c 1 google.com &> /dev/null; then
+        print_error "No internet connection. Please connect to the internet and try again."
+        exit 1
+    fi
+}
 
-#Picom
-#Hitta korrekt version
+# Function to install essential packages
+install_base_packages() {
+    print_status "Installing essential packages..."
+    sudo pacman -Sy --needed --noconfirm \
+        base-devel git curl wget
+}
 
-#Starship
-clear
-echo '############################'
-echo '#    Installing Starship   #'
-echo '############################'
-sleep 3
-curl -sS https://starship.rs/install.sh | sh
+# Function to install yay
+install_yay() {
+    print_status "Installing yay..."
+    if ! command -v yay &> /dev/null; then
+        git clone https://aur.archlinux.org/yay.git /tmp/yay
+        cd /tmp/yay
+        makepkg -si --noconfirm
+        cd -
+        rm -rf /tmp/yay
+    fi
+}
 
-# Wallpapers
-clear
-echo '############################'
-echo '#  Downloading Wallpapers  #'
-echo '############################'
-sleep 3
-cd && git clone https://github.com/abereg01/wallpapers.git
+# Function to clone repositories
+clone_repos() {
+    print_status "Creating directory structure..."
+    mkdir -p "$HOME/lib/images"
+    mkdir -p "$HOME/lib/scripts"
+    mkdir -p "$HOME/.theme"
+    
+    print_status "Cloning repositories..."
+    
+    # Clone dotfiles
+    git clone https://github.com/abereg01/dotfiles.git /tmp/dotfiles
+    cd /tmp/dotfiles
+    git checkout bspwm
+    
+    # Clone other repositories
+    git clone https://github.com/abereg01/wallpapers.git "$HOME/lib/images"
+    git clone https://github.com/abereg01/scripts.git "$HOME/lib/scripts"
+    git clone https://github.com/abereg01/themes.git "$HOME/.theme"
+}
 
-# Symlink
-clear
-echo '############################'
-echo '#     Creating Symlinks    #'
-echo '############################'
-sleep 3
-git clone https://github.com/abereg01/dotfiles.git
-ln -s $HOME/dotfiles/.config/* $HOME/.config/
-ln -s $HOME/dotfiles/scripts/* $HOME/scripts/
-ln -s $HOME/dotfiles/.local/share/dwm/ $HOME/.local/share/
+# Function to install packages
+install_packages() {
+    print_status "Installing required packages..."
+    
+    # X.org and display related
+    sudo pacman -S --needed --noconfirm \
+        xorg xorg-xinit xorg-server \
+        
+    # Display Manager
+    sudo pacman -S --needed --noconfirm \
+        sddm
+        
+    # Window manager and core components
+    sudo pacman -S --needed --noconfirm \
+        bspwm sxhkd \
+        picom \
+        polybar \
+        rofi \
+        dunst \
+        
+    # Terminal and shell
+    sudo pacman -S --needed --noconfirm \
+        kitty \
+        fish \
+        starship \
+        
+    # Development tools
+    sudo pacman -S --needed --noconfirm \
+        neovim \
+        python-pip \
+        nodejs npm \
+        
+    # System utilities
+    sudo pacman -S --needed --noconfirm \
+        bat \
+        btop \
+        lf \
+        cava \
+        fzf \
+        ripgrep \
+        
+    # Applications
+    sudo pacman -S --needed --noconfirm \
+        firefox
+}
 
-#Xsession & DWM
-clear
-echo '############################'
-echo '#      Installing DWM      #'
-echo '############################'
-if [[ ! -d /usr/share/xsessions ]]; then
-       sudo mkdir /usr/share/xsessions
+# Function to setup SDDM
+setup_sddm() {
+    print_status "Setting up SDDM..."
+    
+    # Create bspwm.desktop file
+    sudo mkdir -p /usr/share/xsessions
+    cat << EOF | sudo tee /usr/share/xsessions/bspwm.desktop
+[Desktop Entry]
+Name=bspwm
+Comment=Binary space partitioning window manager
+Exec=bspwm
+Type=Application
+EOF
+
+    # Enable SDDM service
+    sudo systemctl enable sddm.service
+    
+    # Optional: Install a theme for SDDM (you can choose a different theme)
+    yay -S --needed --noconfirm sddm-theme-sugar-candy-git
+    
+    # Configure SDDM theme
+    sudo mkdir -p /etc/sddm.conf.d
+    cat << EOF | sudo tee /etc/sddm.conf.d/theme.conf
+[Theme]
+Current=sugar-candy
+EOF
+}
+
+# Function to setup NvChad
+setup_nvchad() {
+    print_status "Setting up NvChad..."
+    
+    # Backup existing nvim config if it exists
+    [ -d ~/.config/nvim ] && mv ~/.config/nvim ~/.config/nvim.bak
+    
+    # Install NvChad
+    git clone https://github.com/NvChad/NvChad ~/.config/nvim --depth 1
+
+    # Copy custom configuration
+    mkdir -p ~/.config/nvim/lua/custom
+    cp -r /tmp/dotfiles/nvim/lua/* ~/.config/nvim/lua/custom/
+}
+
+# Function to setup dotfiles
+setup_dotfiles() {
+    print_status "Setting up dotfiles..."
+    
+    # Create necessary directories
+    mkdir -p ~/.config
+
+    # Copy configurations
+    configs=("bspwm" "sxhkd" "polybar" "rofi" "dunst" "kitty" "fish" "bat" "btop" "cava" "lf" "picom.conf" "starship.toml")
+    
+    for config in "${configs[@]}"; do
+        if [ -e "/tmp/dotfiles/$config" ]; then
+            print_status "Setting up $config..."
+            cp -r "/tmp/dotfiles/$config" ~/.config/
+        fi
+    done
+
+    # Make scripts executable
+    chmod +x ~/.config/bspwm/bspwmrc
+    chmod +x ~/.config/polybar/launch.sh
+    chmod +x ~/.config/bspwm/bin/*
+
+    # Setup Fish as default shell
+    if ! grep -q "$(which fish)" /etc/shells; then
+        echo "$(which fish)" | sudo tee -a /etc/shells
+    fi
+    chsh -s "$(which fish)"
+}
+
+# Function to set environment variables
+setup_environment() {
+    print_status "Setting up environment variables..."
+    
+    # Create or append to ~/.xprofile
+    cat << EOF >> ~/.xprofile
+# Environment variables
+export TERMINAL=kitty
+export BROWSER=firefox
+export EDITOR=nvim
+
+# Input method
+export GTK_IM_MODULE=fcitx
+export QT_IM_MODULE=fcitx
+export XMODIFIERS=@im=fcitx
+EOF
+}
+
+# Function to clean up
+cleanup() {
+    print_status "Cleaning up..."
+    rm -rf /tmp/dotfiles
+}
+
+# Main installation
+main() {
+    print_status "Starting fresh Arch Linux installation..."
+
+    # Check internet connection
+    check_internet
+
+    # Install base packages and yay
+    install_base_packages
+    install_yay
+
+    # Clone repositories
+    clone_repos
+
+    # Install packages
+    install_packages
+
+    # Setup SDDM
+    setup_sddm
+
+    # Setup dotfiles
+    setup_dotfiles
+
+    # Setup environment
+    setup_environment
+
+    # Setup NvChad
+    setup_nvchad
+
+    # Final steps
+    print_status "Installing additional dependencies..."
+    
+    # Install Mason.nvim dependencies
+    pip install --user pynvim
+    npm install -g neovim
+
+    # Cleanup
+    cleanup
+
+    print_success "Installation completed!"
+    print_status "Please reboot your system to start with SDDM"
+    print_status "After rebooting:"
+    print_status "1. Log in through SDDM"
+    print_status "2. Run 'nvim' to complete NvChad setup"
+}
+
+# Check if script is run as root
+if [ "$(id -u)" = 0 ]; then
+    print_error "This script should not be run as root"
+    exit 1
 fi
 
-cat > ./temp << "EOF"
-[Desktop Entry]
-Encoding=UTF-8
-Name=dwm
-Comment=Dynamic window manager
-Exec=dwm
-Icon=dwm
-Type=Xsession
-EOF
-sudo cp ./temp /usr/share/xsessions/dwm.desktop;rm ./temp
-cd $HOME/dotfiles/.config/suckless/dwm/ && sudo make clean install
-
-# Prop Software
-#clear
-echo '#############################'
-echo '# Installing Prop. Software #'
-echo '#############################'
-sleep 3
-chmod +x $HOME/installer/installation_files/sourceslist.sh &
-sh $HOME/installer/installation_files/sourceslist.sh 
-sudo apt update 
-sudo apt install $(cat $HOME/installer/installation_files/prop_software) -y
-
-
-# Fonts & getNF
-clear
-echo '############################'
-echo '#     Installing fonts     #'
-echo '############################'
-sleep 3
-sudo apt install -y fonts-recommended \
-fonts-ubuntu fonts-font-awesome fonts-terminus
-fc-cache -f -v
-cd $HOME/scripts/getnf && ./getnf &&
-rm -rf $HOME/NerdFonts
-
-#Finishing
-chsh -s `which fish`
-cd && rm -rf $HOME/installer/
-clear
-echo '#################################'
-echo '# Installation done. Rebooting. #'
-echo '#################################'
-sleep 2
-sudo reboot
+# Run the script
+main
