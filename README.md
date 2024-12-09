@@ -1,85 +1,211 @@
-# 🚀 Void Linux Installation Script
+# System Configuration Installer
 
-## 📋 Overview
+A comprehensive installer for setting up complete desktop environments across multiple Linux distributions. Currently supports Arch Linux, Debian/Ubuntu, Fedora, and Void Linux.
 
-This set of scripts automates the installation and configuration process for a customized Void Linux system. It includes base system installation, additional software, and personal configurations.
+## Features
 
-## 🛠 Components
+- 🖥️ Multiple desktop environment options:
+  - BSPWM
+  - KDE Plasma
+  - DWM
+  - Hyprland
 
-The installation process is divided into several scripts:
+- 🛠️ Complete system configuration:
+  - Dotfiles management
+  - Package installation
+  - Service configuration
+  - Repository setup
 
-1. `main_install.sh`: The main script that orchestrates the entire installation process.
-2. `utils.sh`: Contains utility functions used by other scripts.
-3. `base_install.sh`: Installs the base Void Linux system.
-4. `software_install.sh`: Installs additional software and utilities.
-5. `config_install.sh`: Sets up personal configurations and dotfiles.
+- 📦 Pre-configured software suite:
+  - Development tools
+  - Terminal utilities
+  - System monitors
+  - Desktop applications
 
-## 🔧 Features
+## Prerequisites
 
-- 📦 Base Void Linux system installation
-- 🖥️ DWM (Dynamic Window Manager) setup
-- 🎨 Personal dotfiles configuration
-- 📱 Support for Apple Magic Trackpad
-- 🔤 Custom font installation
-- 🖼️ Wallpaper download
-- ⌨️ Fish shell as default
-
-## 🚀 Usage
-
-1. Clone this repository:
-   ```
-   git clone https://github.com/abereg01/void/void-linux-install.git
-   cd void-linux-install
-   ```
-
-2. Make all scripts executable:
-   ```
-   chmod +x *.sh
-   ```
-
-3. Run the main installation script:
-   ```
-   ./main_install.sh
-   ```
-
-⚠️ **Note**: This script will make significant changes to your system. Make sure to review each script and adjust according to your needs before running.
-
-## 📋 Requirements
-
-- A fresh Void Linux installation
+### System Requirements
+- A fresh installation of one of the supported distributions
 - Internet connection
+- USB drive with SSH keys
 - Sudo privileges
 
-## 🛠 Customization
+### Required Directory Structure on USB
+```
+/path/to/usb/
+└── secure/
+    └── .ssh/
+        ├── agent.env
+        ├── config
+        ├── id_ed25519_arch
+        ├── id_ed25519_arch.pub
+        ├── id_ed25519_work
+        ├── id_ed25519_work.pub
+        ├── known_hosts
+        └── known_hosts.old
+```
 
-You can customize the installation by modifying the following files:
+### Distribution-Specific Requirements
 
-- `software_install.sh`: Add or remove packages from the `packages` array.
-- `config_install.sh`: Modify dotfiles repository URL and installation process.
+#### Arch Linux
+- Base system installation
+- Base-devel package group
+- Network connectivity configured
 
-## 📚 Post-Installation
+#### Debian/Ubuntu
+- Standard system installation
+- build-essential package
+- Network connectivity configured
 
-After the installation is complete, the system will automatically reboot. Upon restart:
+#### Fedora
+- Standard system installation
+- Development Tools group
+- Network connectivity configured
 
-1. Log in using your user credentials.
-2. The system should start with DWM as the window manager.
-3. Check if all installed software is working correctly.
-4. Customize further as needed.
+#### Void Linux
+- Base system installation
+- base-devel package
+- Network connectivity configured
 
-## 🤝 Contributing
+## Installation
 
-Feel free to fork this repository and submit pull requests with improvements or additional features.
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/system-installer.git
+cd system-installer
+```
 
-## ⚖️ License
+2. Make the installer executable:
+```bash
+chmod +x install.sh
+```
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+3. Run the installer:
+```bash
+./install.sh
+```
 
-## 🙏 Acknowledgments
+4. Follow the prompts to:
+   - Provide USB drive path
+   - Select desktop environment
+   - Confirm system configuration
 
-- Void Linux community
-- DWM developers
-- All open-source software contributors included in this setup
+## Desktop Environments
 
----
+### BSPWM
+- Minimal tiling window manager
+- Configured with:
+  - Polybar
+  - Rofi
+  - Picom
+  - SXHKD
 
-🌟 Happy Void Linux customizing! 🌟
+### KDE Plasma
+- Full-featured desktop environment
+- Includes:
+  - Plasma workspace
+  - KDE applications
+  - System settings
+
+### DWM
+- Dynamic window manager
+- Built from source
+- Minimal configuration
+
+### Hyprland
+- Wayland compositor
+- Modern features
+- Dynamic tiling
+
+## Post-Installation
+
+1. Log out of your current session
+
+2. Start your chosen desktop environment:
+   - BSPWM: `startx ~/.xinitrc bspwm`
+   - KDE: Select from display manager
+   - DWM: `startx ~/.xinitrc dwm`
+   - Hyprland: `Hyprland`
+
+3. Verify installations:
+   - Check dotfiles in ~/.config
+   - Test SSH key functionality
+   - Verify service status
+
+## Directory Structure After Installation
+
+```
+$HOME/
+├── .config/           # Configuration files
+├── dotfiles/         # Your dotfiles
+├── lib/
+│   ├── scripts/     # System scripts
+│   └── images/      # Wallpapers
+└── .themes/         # Theme files
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. SSH Key Problems
+```bash
+# Check SSH key permissions
+chmod 600 ~/.ssh/id_*
+chmod 644 ~/.ssh/*.pub
+```
+
+2. Service Issues
+```bash
+# Check service status (systemd)
+systemctl status <service-name>
+
+# Check service status (runit)
+sv status <service-name>
+```
+
+3. Repository Problems
+```bash
+# Refresh package databases
+# Arch
+sudo pacman -Sy
+
+# Debian/Ubuntu
+sudo apt update
+
+# Fedora
+sudo dnf check-update
+
+# Void
+sudo xbps-install -S
+```
+
+### Distribution-Specific Notes
+
+#### Arch Linux
+- AUR helper (yay) is installed automatically
+- Ensure multilib repository is enabled if needed
+
+#### Debian/Ubuntu
+- Some packages may require additional repositories
+- Neovim 0.10+ requires unstable repository
+
+#### Fedora
+- RPM Fusion repositories are enabled automatically
+- SELinux is set to permissive mode
+
+#### Void Linux
+- Non-free repository is enabled automatically
+- Some packages may need to be built from source
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a new Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
