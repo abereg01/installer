@@ -1,211 +1,175 @@
-# System Configuration Installer
+# 🚀 System Configuration Installer
 
-A comprehensive installer for setting up complete desktop environments across multiple Linux distributions. Currently supports Arch Linux, Debian/Ubuntu, Fedora, and Void Linux.
+> 🎨 A beautiful, modern desktop environment setup for multiple Linux distributions
 
-## Features
+[![Made with Bash](https://img.shields.io/badge/Made%20with-Bash-1f425f.svg)](https://www.gnu.org/software/bash/)
+[![Supports Arch](https://img.shields.io/badge/Supports-Arch-1793D1.svg?style=flat&logo=arch-linux)](https://archlinux.org/)
+[![Supports Debian](https://img.shields.io/badge/Supports-Debian-A81D33.svg?style=flat&logo=debian)](https://www.debian.org/)
+[![Supports Fedora](https://img.shields.io/badge/Supports-Fedora-294172.svg?style=flat&logo=fedora)](https://getfedora.org/)
+[![Supports Void](https://img.shields.io/badge/Supports-Void-478061.svg?style=flat)](https://voidlinux.org/)
 
-- 🖥️ Multiple desktop environment options:
-  - BSPWM
-  - KDE Plasma
-  - DWM
-  - Hyprland
+<div align="center">
+  <img src="/api/placeholder/800/400" alt="Desktop Preview">
+</div>
 
-- 🛠️ Complete system configuration:
-  - Dotfiles management
-  - Package installation
-  - Service configuration
-  - Repository setup
+## ✨ Features
 
-- 📦 Pre-configured software suite:
-  - Development tools
-  - Terminal utilities
-  - System monitors
-  - Desktop applications
+### 🖥️ Desktop Environments
+- **[BSPWM](https://github.com/baskerville/bspwm)** - Minimal and powerful tiling window manager
+- **[KDE Plasma](https://kde.org/plasma-desktop)** - Full-featured modern desktop
+- **[DWM](https://dwm.suckless.org)** - Dynamic window manager for hackers
+- **[Hyprland](https://hyprland.org)** - Beautiful Wayland compositor
 
-## Prerequisites
+### 🛠️ System Configuration
+- 📁 Automated dotfiles management
+- 📦 Intelligent package installation
+- ⚙️ Service configuration
+- 🔧 Repository setup
 
-### System Requirements
-- A fresh installation of one of the supported distributions
-- Internet connection
-- USB drive with SSH keys
-- Sudo privileges
+### 🎯 Pre-configured Software
+| Category | Tools |
+|----------|-------|
+| 🔨 Development | `neovim`, `git`, `base-devel` |
+| 📺 Terminal | `kitty`, `fish`, `starship` |
+| 📊 Monitoring | `btop`, `neofetch` |
+| 🎨 Customization | `picom`, `rofi`, `polybar` |
 
-### Required Directory Structure on USB
+## 📋 Prerequisites
+
+### 💻 System Requirements
+- ✅ Fresh distribution installation
+- 🌐 Active internet connection
+- 💾 USB drive with SSH keys
+- 👑 Sudo privileges
+
+### 📂 USB Structure
 ```
-/path/to/usb/
-└── secure/
-    └── .ssh/
-        ├── agent.env
-        ├── config
-        ├── id_ed25519_arch
-        ├── id_ed25519_arch.pub
-        ├── id_ed25519_work
-        ├── id_ed25519_work.pub
-        ├── known_hosts
-        └── known_hosts.old
+📁 /path/to/usb/
+└── 📁 secure/
+    └── 📁 .ssh/
+        ├── 📄 agent.env
+        ├── 📄 config
+        ├── 🔑 id_ed25519_arch
+        ├── 🔑 id_ed25519_arch.pub
+        ├── 🔑 id_ed25519_work
+        ├── 🔑 id_ed25519_work.pub
+        ├── 📄 known_hosts
+        └── 📄 known_hosts.old
 ```
 
-### Distribution-Specific Requirements
+## 🚀 Installation
 
-#### Arch Linux
-- Base system installation
-- Base-devel package group
-- Network connectivity configured
-
-#### Debian/Ubuntu
-- Standard system installation
-- build-essential package
-- Network connectivity configured
-
-#### Fedora
-- Standard system installation
-- Development Tools group
-- Network connectivity configured
-
-#### Void Linux
-- Base system installation
-- base-devel package
-- Network connectivity configured
-
-## Installation
-
-1. Clone the repository:
+1. Clone with SSH for push access:
 ```bash
-git clone https://github.com/yourusername/system-installer.git
+git clone git@github.com:yourusername/system-installer.git
 cd system-installer
 ```
 
-2. Make the installer executable:
+2. Make executable:
 ```bash
 chmod +x install.sh
 ```
 
-3. Run the installer:
+3. Launch:
 ```bash
 ./install.sh
 ```
 
-4. Follow the prompts to:
-   - Provide USB drive path
-   - Select desktop environment
-   - Confirm system configuration
+## 🎨 Desktop Environments
 
-## Desktop Environments
+### 🪟 BSPWM
+<div align="center">
+  <img src="/api/placeholder/800/200" alt="BSPWM Preview">
+</div>
 
-### BSPWM
-- Minimal tiling window manager
-- Configured with:
-  - Polybar
-  - Rofi
-  - Picom
-  - SXHKD
+- 📱 Minimal and efficient
+- 🎯 Perfect for keyboard-driven workflow
+- ⚡ Lightning fast
 
-### KDE Plasma
-- Full-featured desktop environment
-- Includes:
-  - Plasma workspace
-  - KDE applications
-  - System settings
+### 💫 KDE Plasma
+<div align="center">
+  <img src="/api/placeholder/800/200" alt="KDE Preview">
+</div>
 
-### DWM
-- Dynamic window manager
-- Built from source
-- Minimal configuration
+- 🎨 Beautiful and customizable
+- 🔧 Feature-rich
+- 🖱️ User-friendly
 
-### Hyprland
-- Wayland compositor
-- Modern features
-- Dynamic tiling
+### 🎯 DWM
+<div align="center">
+  <img src="/api/placeholder/800/200" alt="DWM Preview">
+</div>
 
-## Post-Installation
+- ⚡ Blazing fast
+- 💪 Minimalist
+- 🛠️ Highly hackable
 
-1. Log out of your current session
+### ✨ Hyprland
+<div align="center">
+  <img src="/api/placeholder/800/200" alt="Hyprland Preview">
+</div>
 
-2. Start your chosen desktop environment:
-   - BSPWM: `startx ~/.xinitrc bspwm`
-   - KDE: Select from display manager
-   - DWM: `startx ~/.xinitrc dwm`
-   - Hyprland: `Hyprland`
+- 🌟 Modern animations
+- 📱 Wayland native
+- 🎮 GPU accelerated
 
-3. Verify installations:
-   - Check dotfiles in ~/.config
-   - Test SSH key functionality
-   - Verify service status
-
-## Directory Structure After Installation
+## 📁 Final Directory Structure
 
 ```
-$HOME/
-├── .config/           # Configuration files
-├── dotfiles/         # Your dotfiles
-├── lib/
-│   ├── scripts/     # System scripts
-│   └── images/      # Wallpapers
-└── .themes/         # Theme files
+🏠 $HOME/
+├── 📁 .config/           # Configuration files
+├── 📁 dotfiles/         # Your dotfiles
+├── 📁 lib/
+│   ├── 📁 scripts/     # System scripts
+│   └── 📁 images/      # Wallpapers
+└── 📁 .themes/         # Theme files
 ```
 
-## Troubleshooting
+## 🔧 Troubleshooting
 
-### Common Issues
+### 🚨 Common Issues
 
-1. SSH Key Problems
+#### 🔑 SSH Problems
 ```bash
-# Check SSH key permissions
+# Fix permissions
 chmod 600 ~/.ssh/id_*
 chmod 644 ~/.ssh/*.pub
 ```
 
-2. Service Issues
+#### 🔄 Service Issues
 ```bash
-# Check service status (systemd)
-systemctl status <service-name>
+# systemd
+systemctl status service-name
 
-# Check service status (runit)
-sv status <service-name>
+# runit
+sv status service-name
 ```
 
-3. Repository Problems
-```bash
-# Refresh package databases
-# Arch
-sudo pacman -Sy
+#### 📦 Repository Problems
+Distribution | Command
+-------------|----------
+![Arch](https://img.shields.io/badge/Arch-1793D1?logo=arch-linux) | `sudo pacman -Sy`
+![Debian](https://img.shields.io/badge/Debian-A81D33?logo=debian) | `sudo apt update`
+![Fedora](https://img.shields.io/badge/Fedora-294172?logo=fedora) | `sudo dnf check-update`
+![Void](https://img.shields.io/badge/Void-478061) | `sudo xbps-install -S`
 
-# Debian/Ubuntu
-sudo apt update
+## 🤝 Contributing
 
-# Fedora
-sudo dnf check-update
+1. 🔀 Fork the repository
+2. 🌿 Create your feature branch
+3. 💾 Commit your changes
+4. 🚀 Push to the branch
+5. ✨ Create a Pull Request
 
-# Void
-sudo xbps-install -S
-```
+## 📜 License
 
-### Distribution-Specific Notes
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-#### Arch Linux
-- AUR helper (yay) is installed automatically
-- Ensure multilib repository is enabled if needed
+---
 
-#### Debian/Ubuntu
-- Some packages may require additional repositories
-- Neovim 0.10+ requires unstable repository
+<div align="center">
+  
+### 🌟 Star this repository if you find it helpful!
 
-#### Fedora
-- RPM Fusion repositories are enabled automatically
-- SELinux is set to permissive mode
-
-#### Void Linux
-- Non-free repository is enabled automatically
-- Some packages may need to be built from source
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a new Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+[![Made with ❤️](https://img.shields.io/badge/Made%20with-%E2%9D%A4%EF%B8%8F-red.svg)](https://github.com/yourusername)
+</div>
