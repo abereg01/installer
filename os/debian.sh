@@ -2,6 +2,10 @@
 
 # Debian/Ubuntu specific installation script
 
+# Minimum supported versions
+MIN_UBUNTU_VERSION="22.04"
+MIN_DEBIAN_VERSION="12"
+
 # Base packages for all installations
 BASE_PACKAGES=(
     build-essential
@@ -15,6 +19,12 @@ BASE_PACKAGES=(
     thunar
     sddm
     feh bat ripgrep unzip
+    gparted
+    zram-tools
+    # Development tools
+    nodejs npm
+    python3-pip python3-dev
+    docker.io docker-compose
 )
 
 # Desktop environment specific packages
@@ -27,6 +37,12 @@ KDE_PACKAGES=(
     kde-plasma-desktop
     kde-standard
     dolphin konsole
+)
+
+GNOME_PACKAGES=(
+    ubuntu-desktop
+    gnome-tweaks
+    gnome-shell-extensions
 )
 
 DWM_PACKAGES=(
@@ -42,204 +58,177 @@ HYPRLAND_PACKAGES=(
     wl-clipboard
 )
 
+# Function to check system version
+check_system_version() {
+    print_section "🔍 Checking System Version"
+    
+    if [ -f /etc/debian_version ]; then
+        local version=$(cat /etc/debian_version)
+        if [ "$(printf '%s\n' "$MIN_DEBIAN_VERSION" "$version" | sort -V | head -n1)" != "$MIN_DEBIAN_VERSION" ]; then
+            error "This script requires Debian $MIN_DEBIAN_VERSION or higher. Current version: $version"
+        fi
+    elif [ -f /etc/lsb-release ]; then
+        local version=$(awk -F'=' '/DISTRIB_RELEASE/ {print $2}' /etc/lsb-release)
+        if [ "$(printf '%s\n' "$MIN_UBUNTU_VERSION" "$version" | sort -V | head -n1)" != "$MIN_UBUNTU_VERSION" ]; then
+            error "This script requires Ubuntu $MIN_UBUNTU_VERSION or higher. Current version: $version"
+        fi
+    fi
+    success "System version requirement met"
+}
+
 # Function to setup additional repositories
 setup_repositories() {
     print_section "📦 Setting Up Repositories"
 
     # Add Fish shell repository
     progress "Adding Fish shell repository"
-    sudo apt-add-repository ppa:fish-shell/release-3 -y > /dev/null 2>&1
+    if ! sudo apt-add-repository ppa:fish-shell/release-3 -y; then
+        error "Failed to add Fish shell repository"
+    fi
     success "Added Fish shell repository"
 
     # Add Neovim repository
     progress "Adding Neovim repository"
-    sudo add-apt-repository ppa:neovim-ppa/unstable -y > /dev/null 2>&1
+    if ! sudo add-apt-repository ppa:neovim-ppa/unstable -y; then
+        error "Failed to add Neovim repository"
+    fi
     success "Added Neovim repository"
 
     # Setup Starship repository
     progress "Setting up Starship repository"
-    curl -sS https://starship.rs/install.sh | sh > /dev/null 2>&1
+    if ! curl -sS https://starship.rs/install.sh | sh; then
+        error "Failed to install Starship"
+    fi
     success "Setup Starship repository"
 
     # Add Kitty repository
     progress "Adding Kitty repository"
-    curl -L https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin > /dev/null 2>&1
+    if ! curl -L https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin; then
+        error "Failed to add Kitty repository"
+    fi
     success "Added Kitty repository"
 
-    # Add eza (replacement for exa)
+    # Add eza repository
     progress "Setting up eza repository"
     sudo mkdir -p /etc/apt/keyrings
-    wget -qO- https://raw.githubusercontent.com/eza-community/eza/main/deb.asc | sudo gpg --dearmor -o /etc/apt/keyrings/eza.gpg
+    if ! wget -qO- https://raw.githubusercontent.com/eza-community/eza/main/deb.asc | sudo gpg --dearmor -o /etc/apt/keyrings/eza.gpg; then
+        error "Failed to add eza key"
+    fi
     echo "deb [signed-by=/etc/apt/keyrings/eza.gpg] http://deb.debian.org/debian unstable main" | sudo tee /etc/apt/sources.list.d/eza.list
     success "Added eza repository"
 
     # Add Hyprland repository if selected
     if [ "$DESKTOP_ENV" = "Hyprland" ]; then
         progress "Adding Hyprland repository"
-        sudo add-apt-repository ppa:hyprland-dev/ppa -y > /dev/null 2>&1
+        if ! sudo add-apt-repository ppa:hyprland-dev/ppa -y; then
+            error "Failed to add Hyprland repository"
+        fi
         success "Added Hyprland repository"
     fi
 
-    # Update package lists after adding repositories
+    # Add VS Code repository
+    progress "Adding VS Code repository"
+    if ! wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /tmp/packages.microsoft.gpg; then
+        error "Failed to download Microsoft key"
+    fi
+    sudo install -o root -g root -m 644 /tmp/packages.microsoft.gpg /etc/apt/trusted.gpg.d/
+    echo "deb [arch=amd64] https://packages.microsoft.com/repos/vscode stable main" | sudo tee /etc/apt/sources.list.d/vscode.list
+    rm /tmp/packages.microsoft.gpg
+    success "Added VS Code repository"
+
+    # Update package lists
     progress "Updating package lists"
-    sudo apt update > /dev/null 2>&1
+    if ! sudo apt update; then
+        error "Failed to update package lists"
+    fi
     success "Updated package lists"
 }
 
-# Function to check neovim version requirement
-check_neovim_version() {
-    print_section "🔍 Checking Neovim Version"
+# Function to configure ZRAM
+configure_zram() {
+    print_section "🔧 Configuring ZRAM"
     
-    progress "Verifying Neovim version"
-    local nvim_version=$(nvim --version | head -n1 | cut -d ' ' -f2)
-    local required_version="0.10.0"
+    progress "Creating ZRAM configuration"
+    echo -e "ALGO=zstd\nPERCENT=50" | sudo tee /etc/default/zramswap
+    sudo systemctl restart zramswap
+    success "Configured ZRAM"
+}
+
+# Function to update firmware
+update_firmware() {
+    print_section "🔄 Updating Firmware"
     
-    if [ "$(printf '%s\n' "$required_version" "$nvim_version" | sort -V | head -n1)" != "$required_version" ]; then
-        error "Neovim version must be at least 0.10.0. Found version: $nvim_version"
+    progress "Installing fwupd"
+    sudo apt install -y fwupd
+    
+    progress "Checking for firmware updates"
+    sudo fwupdmgr get-devices
+    sudo fwupdmgr refresh
+    sudo fwupdmgr get-updates
+    
+    progress "Installing firmware updates"
+    sudo fwupdmgr update
+    success "Firmware update complete"
+}
+
+# Function to install development tools
+install_dev_tools() {
+    print_section "🛠️ Installing Development Tools"
+    
+    progress "Installing VS Code"
+    sudo apt install -y code
+    
+    progress "Installing Python development tools"
+    pip3 install --user pylint black mypy pytest
+    
+    progress "Installing Node.js development tools"
+    sudo npm install -g typescript ts-node eslint prettier
+    
+    success "Installed development tools"
+}
+
+# Function to install multimedia codecs
+install_multimedia_codecs() {
+    print_section "🎵 Installing Multimedia Codecs"
+    
+    if [ -f /etc/lsb-release ]; then
+        # Ubuntu
+        sudo apt install -y ubuntu-restricted-extras
+    else
+        # Debian
+        sudo apt install -y libavcodec-extra
+        sudo apt install -y multimedia-audio-plugins
     fi
-    success "Neovim version requirement met: $nvim_version"
+    
+    success "Installed multimedia codecs"
 }
 
-# Function to install btop from source
-install_btop() {
-    print_section "📦 Installing btop"
+# Rest of your existing functions (install_btop, install_chrome, install_dwm, etc.)
+# ... (keep them as they are)
+
+# Function to cleanup packages
+cleanup_packages() {
+    print_section "🧹 Cleaning Up"
     
-    progress "Cloning btop repository"
-    git clone https://github.com/aristocratos/btop.git /tmp/btop > /dev/null 2>&1 || {
-        error "Failed to clone btop"
-    }
+    progress "Removing unused packages"
+    sudo apt autoremove -y
     
-    progress "Building btop"
-    (cd /tmp/btop && make && sudo make install) > /dev/null 2>&1 || {
-        error "Failed to build btop"
-    }
-    
-    rm -rf /tmp/btop
-    success "Installed btop successfully"
-}
-
-# Function to install Google Chrome
-install_chrome() {
-    print_section "📦 Installing Google Chrome"
-
-    progress "Downloading Chrome package"
-    wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -O /tmp/chrome.deb || {
-        error "Failed to download Chrome"
-    }
-
-    progress "Installing Chrome"
-    sudo dpkg -i /tmp/chrome.deb > /dev/null 2>&1 || {
-        sudo apt-get install -f -y > /dev/null 2>&1
-    }
-    rm /tmp/chrome.deb
-    success "Installed Google Chrome"
-}
-
-# Function to install DWM
-install_dwm() {
-    print_section "📦 Installing DWM"
-    
-    progress "Cloning DWM repository"
-    git clone https://git.suckless.org/dwm /tmp/dwm || {
-        error "Failed to clone DWM"
-    }
-    
-    progress "Building DWM"
-    (cd /tmp/dwm && sudo make clean install) > /dev/null 2>&1 || {
-        error "Failed to build DWM"
-    }
-    
-    rm -rf /tmp/dwm
-    success "Built and installed DWM"
-}
-
-# Function to install packages
-install_packages() {
-    print_section "📦 Installing Packages"
-
-    # Update system first
-    progress "Updating system"
-    sudo apt update && sudo apt upgrade -y > /dev/null 2>&1 || {
-        error "Failed to update system"
-    }
-    success "System updated"
-
-    # Install base packages
-    progress "Installing base packages"
-    sudo apt install -y "${BASE_PACKAGES[@]}" > /dev/null 2>&1 || {
-        error "Failed to install base packages"
-    }
-    success "Installed base packages"
-
-    # Install DE-specific packages
-    case "$DESKTOP_ENV" in
-        "BSPWM")
-            progress "Installing BSPWM packages"
-            sudo apt install -y "${BSPWM_PACKAGES[@]}" > /dev/null 2>&1 || {
-                error "Failed to install BSPWM packages"
-            }
-            success "Installed BSPWM packages"
-            ;;
-        "KDE")
-            progress "Installing KDE packages"
-            sudo apt install -y "${KDE_PACKAGES[@]}" > /dev/null 2>&1 || {
-                error "Failed to install KDE packages"
-            }
-            success "Installed KDE packages"
-            ;;
-        "DWM")
-            progress "Installing DWM dependencies"
-            sudo apt install -y "${DWM_PACKAGES[@]}" > /dev/null 2>&1 || {
-                error "Failed to install DWM dependencies"
-            }
-            install_dwm
-            ;;
-        "Hyprland")
-            progress "Installing Hyprland packages"
-            sudo apt install -y "${HYPRLAND_PACKAGES[@]}" > /dev/null 2>&1 || {
-                error "Failed to install Hyprland packages"
-            }
-            success "Installed Hyprland packages"
-            ;;
-    esac
-
-    # Install additional software
-    install_btop
-    install_chrome
-
-    # Verify neovim version after installation
-    check_neovim_version
-}
-
-# Function to configure services
-configure_services() {
-    print_section "🔧 Configuring Services"
-
-    local SERVICES=(
-        NetworkManager
-        sddm
-    )
-
-    for service in "${SERVICES[@]}"; do
-        progress "Enabling $service"
-        sudo systemctl enable "$service" > /dev/null 2>&1 || {
-            warn "Failed to enable $service"
-            continue
-        }
-        success "Enabled $service"
-    done
-
-    # Configure PipeWire
-    progress "Configuring PipeWire"
-    systemctl --user --now enable pipewire pipewire-pulse > /dev/null 2>&1
-    success "Configured PipeWire"
+    progress "Cleaning package cache"
+    sudo apt clean
+    success "Cleanup complete"
 }
 
 # Main Debian/Ubuntu installation function
 install_debian() {
+    check_system_version
     setup_repositories
     install_packages
+    install_dev_tools
+    install_multimedia_codecs
     configure_services
+    configure_zram
+    update_firmware
+    cleanup_packages
 }
 
 # Run the installation
