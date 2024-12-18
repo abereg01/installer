@@ -15,6 +15,12 @@ BASE_PACKAGES=(
     thunar
     sddm
     feh eza bat btop ripgrep unzip
+    # Development tools
+    nodejs npm yarn
+    python python-pip python-setuptools
+    docker docker-compose
+    gparted
+    zram-generator
 )
 
 # Desktop environment specific packages
@@ -30,6 +36,12 @@ KDE_PACKAGES=(
     plasma-nm plasma-pa
 )
 
+GNOME_PACKAGES=(
+    gnome
+    gnome-tweaks
+    gnome-shell-extensions
+)
+
 DWM_PACKAGES=(
     libx11 libxft libxinerama
     xorg-server xorg-xinit
@@ -42,6 +54,29 @@ HYPRLAND_PACKAGES=(
     grim slurp
     wl-clipboard
 )
+
+# Check Arch Linux
+check_arch_version() {
+    print_section "🔍 Checking System Requirements"
+    
+    progress "Verifying system"
+    if ! grep -q "Arch Linux" /etc/os-release; then
+        error "This script requires Arch Linux"
+    fi
+    success "System requirements met"
+}
+
+# Configure pacman
+configure_pacman() {
+    print_section "🔧 Configuring Pacman"
+    
+    progress "Optimizing pacman configuration"
+    sudo sed -i 's/#ParallelDownloads = 5/ParallelDownloads = 10/' /etc/pacman.conf
+    sudo sed -i 's/#Color/Color/' /etc/pacman.conf
+    sudo sed -i 's/#VerbosePkgLists/VerbosePkgLists/' /etc/pacman.conf
+    
+    success "Optimized pacman configuration"
+}
 
 # Function to check neovim version requirement
 check_neovim_version() {
@@ -67,17 +102,78 @@ install_yay() {
     }
 
     progress "Cloning yay repository"
-    git clone https://aur.archlinux.org/yay.git /tmp/yay > /dev/null 2>&1 || {
+    git clone https://aur.archlinux.org/yay.git /tmp/yay || {
         error "Failed to clone yay"
     }
     
     progress "Building yay"
-    (cd /tmp/yay && makepkg -si --noconfirm) > /dev/null 2>&1 || {
+    (cd /tmp/yay && makepkg -si --noconfirm) || {
         error "Failed to build yay"
     }
     
     rm -rf /tmp/yay
     success "Installed yay successfully"
+}
+
+# Function to configure ZRAM
+configure_zram() {
+    print_section "🔧 Configuring ZRAM"
+    
+    progress "Creating ZRAM configuration"
+    sudo tee /etc/systemd/zram-generator.conf > /dev/null << EOF
+[zram0]
+zram-size = ram / 2
+compression-algorithm = zstd
+swap-priority = 100
+EOF
+    
+    systemctl daemon-reload
+    success "Configured ZRAM"
+}
+
+# Function to update firmware
+update_firmware() {
+    print_section "🔄 Updating Firmware"
+    
+    progress "Installing fwupd"
+    sudo pacman -S --needed --noconfirm fwupd
+    
+    progress "Checking for firmware updates"
+    sudo fwupdmgr get-devices
+    sudo fwupdmgr refresh
+    sudo fwupdmgr get-updates
+    
+    progress "Installing firmware updates"
+    sudo fwupdmgr update
+    success "Firmware update complete"
+}
+
+# Function to install multimedia support
+install_multimedia() {
+    print_section "🎵 Installing Multimedia Support"
+    
+    progress "Installing multimedia packages"
+    sudo pacman -S --needed --noconfirm \
+        gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly \
+        gst-libav ffmpeg
+        
+    success "Installed multimedia codecs"
+}
+
+# Function to install development tools
+install_dev_tools() {
+    print_section "🛠️ Installing Development Tools"
+    
+    progress "Installing VS Code"
+    yay -S --needed --noconfirm visual-studio-code-bin
+    
+    progress "Installing Python development tools"
+    pip install --user pylint black mypy pytest
+    
+    progress "Installing Node.js development tools"
+    npm install -g typescript ts-node eslint prettier
+    
+    success "Installed development tools"
 }
 
 # Function to install packages
@@ -86,14 +182,14 @@ install_packages() {
 
     # Update system first
     progress "Updating system"
-    sudo pacman -Syu --noconfirm > /dev/null 2>&1 || {
+    sudo pacman -Syu --noconfirm || {
         error "Failed to update system"
     }
     success "System updated"
 
     # Install base packages
     progress "Installing base packages"
-    sudo pacman -S --needed --noconfirm "${BASE_PACKAGES[@]}" > /dev/null 2>&1 || {
+    sudo pacman -S --needed --noconfirm "${BASE_PACKAGES[@]}" || {
         error "Failed to install base packages"
     }
     success "Installed base packages"
@@ -102,21 +198,26 @@ install_packages() {
     case "$DESKTOP_ENV" in
         "BSPWM")
             progress "Installing BSPWM packages"
-            sudo pacman -S --needed --noconfirm "${BSPWM_PACKAGES[@]}" > /dev/null 2>&1 || {
+            sudo pacman -S --needed --noconfirm "${BSPWM_PACKAGES[@]}" || {
                 error "Failed to install BSPWM packages"
             }
             success "Installed BSPWM packages"
             ;;
         "KDE")
             progress "Installing KDE packages"
-            sudo pacman -S --needed --noconfirm "${KDE_PACKAGES[@]}" > /dev/null 2>&1 || {
+            sudo pacman -S --needed --noconfirm "${KDE_PACKAGES[@]}" || {
                 error "Failed to install KDE packages"
+            }
+            # Add GNOME for Microsoft365/AD integration
+            progress "Installing GNOME for Microsoft365 integration"
+            sudo pacman -S --needed --noconfirm "${GNOME_PACKAGES[@]}" || {
+                warn "Failed to install GNOME components"
             }
             success "Installed KDE packages"
             ;;
         "DWM")
             progress "Installing DWM dependencies"
-            sudo pacman -S --needed --noconfirm "${DWM_PACKAGES[@]}" > /dev/null 2>&1 || {
+            sudo pacman -S --needed --noconfirm "${DWM_PACKAGES[@]}" || {
                 error "Failed to install DWM dependencies"
             }
             success "Installed DWM dependencies"
@@ -124,14 +225,14 @@ install_packages() {
             # Clone and build DWM
             progress "Building DWM"
             git clone https://git.suckless.org/dwm /tmp/dwm
-            (cd /tmp/dwm && sudo make clean install) > /dev/null 2>&1 || {
+            (cd /tmp/dwm && sudo make clean install) || {
                 error "Failed to build DWM"
             }
             success "Built and installed DWM"
             ;;
         "Hyprland")
             progress "Installing Hyprland packages"
-            sudo pacman -S --needed --noconfirm "${HYPRLAND_PACKAGES[@]}" > /dev/null 2>&1 || {
+            sudo pacman -S --needed --noconfirm "${HYPRLAND_PACKAGES[@]}" || {
                 error "Failed to install Hyprland packages"
             }
             success "Installed Hyprland packages"
@@ -142,7 +243,7 @@ install_packages() {
     install_yay
     
     progress "Installing AUR packages"
-    yay -S --needed --noconfirm getnf notify-send.sh google-chrome > /dev/null 2>&1 || {
+    yay -S --needed --noconfirm getnf notify-send.sh google-chrome || {
         warn "Some AUR packages failed to install"
     }
     success "Installed AUR packages"
@@ -159,6 +260,7 @@ configure_services() {
         NetworkManager
         sddm
         pipewire-pulse
+        docker
     )
 
     for service in "${SERVICES[@]}"; do
@@ -171,10 +273,27 @@ configure_services() {
     done
 }
 
+# Function to cleanup packages
+cleanup_packages() {
+    print_section "🧹 Cleaning Up"
+    
+    progress "Cleaning package cache"
+    sudo pacman -Sc --noconfirm
+    sudo paccache -r
+    success "Cleaned package cache"
+}
+
 # Main Arch installation function
 install_arch() {
+    check_arch_version
+    configure_pacman
     install_packages
+    install_dev_tools
+    install_multimedia
     configure_services
+    configure_zram
+    update_firmware
+    cleanup_packages
 }
 
 # Run the installation
