@@ -2,6 +2,9 @@
 
 # Fedora specific installation script
 
+# Minimum supported Fedora version
+MIN_FEDORA_VERSION=41
+
 # Base packages for all installations
 BASE_PACKAGES=(
     '@Development Tools'
@@ -15,6 +18,13 @@ BASE_PACKAGES=(
     thunar
     sddm
     feh eza bat btop ripgrep unzip
+    gparted
+    zram-generator
+    dnf-automatic
+    # Development tools
+    nodejs npm yarn
+    python3-pip python3-devel
+    podman podman-docker buildah
 )
 
 # Desktop environment specific packages
@@ -27,6 +37,12 @@ KDE_PACKAGES=(
     '@KDE Plasma Workstation'
     kde-apps
     plasma-workspace
+)
+
+GNOME_PACKAGES=(
+    '@Workstation Product Environment'
+    gnome-tweaks
+    gnome-shell-extension-gsconnect
 )
 
 DWM_PACKAGES=(
@@ -42,173 +58,187 @@ HYPRLAND_PACKAGES=(
     wl-clipboard
 )
 
+# Function to check Fedora version
+check_fedora_version() {
+    print_section "🔍 Checking Fedora Version"
+    
+    local current_version=$(rpm -E %fedora)
+    if [ "$current_version" -lt "$MIN_FEDORA_VERSION" ]; then
+        error "This script requires Fedora $MIN_FEDORA_VERSION or higher. Current version: $current_version"
+        exit 1
+    }
+    success "Fedora version requirement met: $current_version"
+}
+
 # Function to setup additional repositories
 setup_repositories() {
     print_section "📦 Setting Up Repositories"
 
     # Enable RPM Fusion repositories
     progress "Enabling RPM Fusion repositories"
-    sudo dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
-                       https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm \
-                       > /dev/null 2>&1
+    if ! sudo dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
+                            https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm; then
+        error "Failed to enable RPM Fusion repositories"
+    fi
     success "Enabled RPM Fusion repositories"
 
     # Enable Copr repository for neovim nightly
     progress "Enabling Neovim repository"
-    sudo dnf copr enable -y agriffis/neovim-nightly > /dev/null 2>&1
+    if ! sudo dnf copr enable -y agriffis/neovim-nightly; then
+        error "Failed to enable Neovim repository"
+    fi
     success "Enabled Neovim repository"
 
     # Add VSCode repository
     progress "Adding VSCode repository"
-    sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
-    sudo sh -c 'echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" > /etc/yum.repos.d/vscode.repo'
+    if ! sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc; then
+        error "Failed to import Microsoft key"
+    fi
+    if ! sudo sh -c 'echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" > /etc/yum.repos.d/vscode.repo'; then
+        error "Failed to add VSCode repository"
+    fi
     success "Added VSCode repository"
 
     # Add Google Chrome repository
     progress "Adding Google Chrome repository"
-    sudo dnf config-manager --set-enabled google-chrome > /dev/null 2>&1
+    if ! sudo dnf config-manager --set-enabled google-chrome; then
+        error "Failed to enable Google Chrome repository"
+    fi
     success "Added Google Chrome repository"
+
+    # Enable Flathub
+    progress "Setting up Flatpak and Flathub"
+    if ! sudo dnf install -y flatpak; then
+        error "Failed to install Flatpak"
+    fi
+    if ! flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo; then
+        error "Failed to add Flathub repository"
+    fi
+    success "Enabled Flatpak and Flathub"
 
     # Update package lists after adding repositories
     progress "Updating package lists"
-    sudo dnf check-update > /dev/null 2>&1
+    sudo dnf check-update || true  # This command returns 100 if updates are available
     success "Updated package lists"
 }
 
-# Function to check neovim version requirement
-check_neovim_version() {
-    print_section "🔍 Checking Neovim Version"
+# Function to configure zram
+configure_zram() {
+    print_section "🔧 Configuring ZRAM"
     
-    progress "Verifying Neovim version"
-    local nvim_version=$(nvim --version | head -n1 | cut -d ' ' -f2)
-    local required_version="0.10.0"
+    progress "Creating ZRAM configuration"
+    sudo tee /etc/systemd/zram-generator.conf > /dev/null << EOF
+[zram0]
+zram-size = ram / 2
+compression-algorithm = zstd
+swap-priority = 100
+EOF
     
-    if [ "$(printf '%s\n' "$required_version" "$nvim_version" | sort -V | head -n1)" != "$required_version" ]; then
-        error "Neovim version must be at least 0.10.0. Found version: $nvim_version"
-    fi
-    success "Neovim version requirement met: $nvim_version"
+    systemctl daemon-reload
+    success "Configured ZRAM"
 }
 
-# Function to install DWM
-install_dwm() {
-    print_section "📦 Installing DWM"
+# Function to configure DNF
+configure_dnf() {
+    print_section "🔧 Configuring DNF"
     
-    progress "Cloning DWM repository"
-    git clone https://git.suckless.org/dwm /tmp/dwm || {
-        error "Failed to clone DWM"
-    }
+    progress "Optimizing DNF configuration"
+    echo 'max_parallel_downloads=10' | sudo tee -a /etc/dnf/dnf.conf
+    echo 'fastestmirror=true' | sudo tee -a /etc/dnf/dnf.conf
+    echo 'deltarpm=true' | sudo tee -a /etc/dnf/dnf.conf
+    success "Optimized DNF configuration"
     
-    progress "Building DWM"
-    (cd /tmp/dwm && sudo make clean install) > /dev/null 2>&1 || {
-        error "Failed to build DWM"
-    }
-    
-    rm -rf /tmp/dwm
-    success "Built and installed DWM"
+    progress "Configuring automatic updates"
+    sudo systemctl enable --now dnf-automatic.timer
+    success "Enabled automatic updates"
 }
 
-# Function to install packages
-install_packages() {
-    print_section "📦 Installing Packages"
+# Function to install multimedia codecs
+install_multimedia_codecs() {
+    print_section "🎵 Installing Multimedia Codecs"
+    
+    progress "Installing multimedia packages"
+    sudo dnf groupupdate -y multimedia --setop="install_weak_deps=False" --exclude=PackageKit-gstreamer-plugin
+    sudo dnf groupupdate -y sound-and-video
+    success "Installed multimedia codecs"
+}
 
-    # Update system first
-    progress "Updating system"
-    sudo dnf upgrade -y > /dev/null 2>&1 || {
-        error "Failed to update system"
-    }
-    success "System updated"
+# Function to update firmware
+update_firmware() {
+    print_section "🔄 Updating Firmware"
+    
+    progress "Installing fwupd"
+    sudo dnf install -y fwupd
+    
+    progress "Checking for firmware updates"
+    sudo fwupdmgr get-devices
+    sudo fwupdmgr refresh
+    sudo fwupdmgr get-updates
+    
+    progress "Installing firmware updates"
+    sudo fwupdmgr update
+    success "Firmware update complete"
+}
 
-    # Install base packages
-    progress "Installing base packages"
-    sudo dnf install -y "${BASE_PACKAGES[@]}" > /dev/null 2>&1 || {
-        error "Failed to install base packages"
-    }
-    success "Installed base packages"
+# Function to install packages based on selected DE
+install_desktop_environment() {
+    print_section "🖥️ Installing Desktop Environment"
 
-    # Install DE-specific packages
     case "$DESKTOP_ENV" in
         "BSPWM")
-            progress "Installing BSPWM packages"
-            sudo dnf install -y "${BSPWM_PACKAGES[@]}" > /dev/null 2>&1 || {
-                error "Failed to install BSPWM packages"
-            }
-            success "Installed BSPWM packages"
+            progress "Installing BSPWM"
+            sudo dnf install -y "${BSPWM_PACKAGES[@]}" || error "Failed to install BSPWM"
             ;;
         "KDE")
-            progress "Installing KDE packages"
-            sudo dnf group install -y "${KDE_PACKAGES[@]}" > /dev/null 2>&1 || {
-                error "Failed to install KDE packages"
-            }
-            success "Installed KDE packages"
+            progress "Installing KDE"
+            sudo dnf group install -y "${KDE_PACKAGES[@]}" || error "Failed to install KDE"
+            # Add GNOME for Microsoft365/AD integration if KDE is selected
+            progress "Installing GNOME for Microsoft365 integration"
+            sudo dnf group install -y "${GNOME_PACKAGES[@]}" || warn "Failed to install GNOME components"
             ;;
         "DWM")
             progress "Installing DWM dependencies"
-            sudo dnf install -y "${DWM_PACKAGES[@]}" > /dev/null 2>&1 || {
-                error "Failed to install DWM dependencies"
-            }
+            sudo dnf install -y "${DWM_PACKAGES[@]}" || error "Failed to install DWM dependencies"
             install_dwm
             ;;
         "Hyprland")
-            progress "Installing Hyprland packages"
-            sudo dnf install -y "${HYPRLAND_PACKAGES[@]}" > /dev/null 2>&1 || {
-                error "Failed to install Hyprland packages"
-            }
-            success "Installed Hyprland packages"
+            progress "Installing Hyprland"
+            sudo dnf install -y "${HYPRLAND_PACKAGES[@]}" || error "Failed to install Hyprland"
             ;;
     esac
-
-    # Install Google Chrome
-    progress "Installing Google Chrome"
-    sudo dnf install -y google-chrome-stable > /dev/null 2>&1 || {
-        warn "Failed to install Google Chrome"
-    }
-    success "Installed Google Chrome"
-
-    # Verify neovim version after installation
-    check_neovim_version
+    success "Installed $DESKTOP_ENV"
 }
 
-# Function to configure services
-configure_services() {
-    print_section "🔧 Configuring Services"
-
-    local SERVICES=(
-        NetworkManager
-        sddm
-    )
-
-    for service in "${SERVICES[@]}"; do
-        progress "Enabling $service"
-        sudo systemctl enable "$service" > /dev/null 2>&1 || {
-            warn "Failed to enable $service"
-            continue
-        }
-        success "Enabled $service"
-    done
-
-    # Configure PipeWire
-    progress "Configuring PipeWire"
-    systemctl --user --now enable pipewire pipewire-pulse > /dev/null 2>&1
-    success "Configured PipeWire"
-}
-
-# Function to configure SELinux
-configure_selinux() {
-    print_section "🔒 Configuring SELinux"
+# Function to install development tools
+install_dev_tools() {
+    print_section "🛠️ Installing Development Tools"
     
-    progress "Setting SELinux to permissive mode"
-    sudo setenforce 0
-    sudo sed -i 's/^SELINUX=.*$/SELINUX=permissive/' /etc/selinux/config
-    success "Set SELinux to permissive mode"
+    progress "Installing VS Code"
+    sudo dnf install -y code
+    
+    # Install Python tools
+    progress "Installing Python development tools"
+    pip install --user pylint black mypy pytest
+    
+    # Install Node.js tools
+    progress "Installing Node.js development tools"
+    npm install -g typescript ts-node eslint prettier
+    
+    success "Installed development tools"
 }
 
 # Main Fedora installation function
 install_fedora() {
+    check_fedora_version
     setup_repositories
+    configure_dnf
     install_packages
+    install_desktop_environment  # Changed from plural to singular
+    install_dev_tools
+    install_multimedia_codecs
     configure_services
     configure_selinux
+    configure_zram
+    update_firmware
+    cleanup_packages
 }
-
-# Run the installation
-install_fedora
