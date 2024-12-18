@@ -87,9 +87,6 @@ chmod +x install.sh
 - ⚡ Lightning fast
 
 ### 💫 KDE Plasma
-<div align="center">
-  <img src="/api/placeholder/800/200" alt="KDE Preview">
-</div>
 
 - 🎨 Beautiful and customizable
 - 🔧 Feature-rich
