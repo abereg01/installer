@@ -25,6 +25,7 @@ BASE_PACKAGES=(
     nodejs npm yarn
     python3-pip python3-devel
     podman podman-docker buildah
+    chromium
 )
 
 # Desktop environment specific packages
@@ -70,6 +71,20 @@ check_fedora_version() {
     success "Fedora version requirement met: $current_version"
 }
 
+# Function to check neovim version requirement
+check_neovim_version() {
+    print_section "🔍 Checking Neovim Version"
+    
+    progress "Verifying Neovim version"
+    local nvim_version=$(nvim --version | head -n1 | cut -d ' ' -f2)
+    local required_version="0.10.0"
+    
+    if [ "$(printf '%s\n' "$required_version" "$nvim_version" | sort -V | head -n1)" != "$required_version" ]; then
+        error "Neovim version must be at least 0.10.0. Found version: $nvim_version"
+    fi
+    success "Neovim version requirement met: $nvim_version"
+}
+
 # Function to setup additional repositories
 setup_repositories() {
     print_section "📦 Setting Up Repositories"
@@ -98,23 +113,6 @@ setup_repositories() {
         error "Failed to add VSCode repository"
     fi
     success "Added VSCode repository"
-
-    # Add Google Chrome repository
-    progress "Adding Google Chrome repository"
-    if ! sudo dnf config-manager --set-enabled google-chrome; then
-        error "Failed to enable Google Chrome repository"
-    fi
-    success "Added Google Chrome repository"
-
-    # Enable Flathub
-    progress "Setting up Flatpak and Flathub"
-    if ! sudo dnf install -y flatpak; then
-        error "Failed to install Flatpak"
-    fi
-    if ! flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo; then
-        error "Failed to add Flathub repository"
-    fi
-    success "Enabled Flatpak and Flathub"
 
     # Update package lists after adding repositories
     progress "Updating package lists"
@@ -158,87 +156,165 @@ install_multimedia_codecs() {
     print_section "🎵 Installing Multimedia Codecs"
     
     progress "Installing multimedia packages"
-    sudo dnf groupupdate -y multimedia --setop="install_weak_deps=False" --exclude=PackageKit-gstreamer-plugin
-    sudo dnf groupupdate -y sound-and-video
-    success "Installed multimedia codecs"
-}
+    sudo dnf groupupdate -y multimedia --setop="install_weak
+    # Function to install multimedia codecs (continued)
+    install_multimedia_codecs() {
+        print_section "🎵 Installing Multimedia Codecs"
 
 # Function to update firmware
-update_firmware() {
-    print_section "🔄 Updating Firmware"
-    
-    progress "Installing fwupd"
-    sudo dnf install -y fwupd
-    
-    progress "Checking for firmware updates"
-    sudo fwupdmgr get-devices
-    sudo fwupdmgr refresh
-    sudo fwupdmgr get-updates
-    
-    progress "Installing firmware updates"
-    sudo fwupdmgr update
-    success "Firmware update complete"
-}
+    update_firmware() {
+        print_section "🔄 Updating Firmware"
+        
+        progress "Installing fwupd"
+        sudo dnf install -y fwupd
+        
+        progress "Checking for firmware updates"
+        sudo fwupdmgr get-devices
+        sudo fwupdmgr refresh
+        sudo fwupdmgr get-updates
+        
+        progress "Installing firmware updates"
+        sudo fwupdmgr update
+        success "Firmware update complete"
+    }
 
-# Function to install packages based on selected DE
-install_desktop_environment() {
-    print_section "🖥️ Installing Desktop Environment"
+    # Function to install development tools
+    install_dev_tools() {
+        print_section "🛠️ Installing Development Tools"
+        
+        progress "Installing VS Code"
+        sudo dnf install -y code
+        
+        progress "Installing Python development tools"
+        pip install --user pylint black mypy pytest
+        
+        progress "Installing Node.js development tools"
+        npm install -g typescript ts-node eslint prettier
+        
+        success "Installed development tools"
+    }
 
-    case "$DESKTOP_ENV" in
-        "BSPWM")
-            progress "Installing BSPWM"
-            sudo dnf install -y "${BSPWM_PACKAGES[@]}" || error "Failed to install BSPWM"
-            ;;
-        "KDE")
-            progress "Installing KDE"
-            sudo dnf group install -y "${KDE_PACKAGES[@]}" || error "Failed to install KDE"
-            # Add GNOME for Microsoft365/AD integration if KDE is selected
-            progress "Installing GNOME for Microsoft365 integration"
-            sudo dnf group install -y "${GNOME_PACKAGES[@]}" || warn "Failed to install GNOME components"
-            ;;
-        "DWM")
-            progress "Installing DWM dependencies"
-            sudo dnf install -y "${DWM_PACKAGES[@]}" || error "Failed to install DWM dependencies"
-            install_dwm
-            ;;
-        "Hyprland")
-            progress "Installing Hyprland"
-            sudo dnf install -y "${HYPRLAND_PACKAGES[@]}" || error "Failed to install Hyprland"
-            ;;
-    esac
-    success "Installed $DESKTOP_ENV"
-}
+    # Function to cleanup packages
+    cleanup_packages() {
+        print_section "🧹 Cleaning Up"
+        
+        progress "Removing unused packages"
+        sudo dnf autoremove -y
+        
+        progress "Cleaning DNF cache"
+        sudo dnf clean all
+        success "Cleanup complete"
+    }
 
-# Function to install development tools
-install_dev_tools() {
-    print_section "🛠️ Installing Development Tools"
-    
-    progress "Installing VS Code"
-    sudo dnf install -y code
-    
-    # Install Python tools
-    progress "Installing Python development tools"
-    pip install --user pylint black mypy pytest
-    
-    # Install Node.js tools
-    progress "Installing Node.js development tools"
-    npm install -g typescript ts-node eslint prettier
-    
-    success "Installed development tools"
-}
+    # Function to install packages
+    install_packages() {
+        print_section "📦 Installing Packages"
 
-# Main Fedora installation function
-install_fedora() {
-    check_fedora_version
-    setup_repositories
-    configure_dnf
-    install_packages
-    install_desktop_environment  # Changed from plural to singular
-    install_dev_tools
-    install_multimedia_codecs
-    configure_services
-    configure_selinux
-    configure_zram
-    update_firmware
-    cleanup_packages
-}
+        # Update system first
+        progress "Updating system"
+        sudo dnf upgrade -y || {
+            error "Failed to update system"
+        }
+        success "System updated"
+
+        # Install base packages
+        progress "Installing base packages"
+        sudo dnf install -y "${BASE_PACKAGES[@]}" || {
+            error "Failed to install base packages"
+        }
+        success "Installed base packages"
+
+        # Install DE-specific packages
+        case "$DESKTOP_ENV" in
+            "BSPWM")
+                progress "Installing BSPWM packages"
+                sudo dnf install -y "${BSPWM_PACKAGES[@]}" || {
+                    error "Failed to install BSPWM packages"
+                }
+                success "Installed BSPWM packages"
+                ;;
+            "KDE")
+                progress "Installing KDE packages"
+                sudo dnf group install -y "${KDE_PACKAGES[@]}" || {
+                    error "Failed to install KDE packages"
+                }
+                # Add GNOME for Microsoft365/AD integration
+                progress "Installing GNOME for Microsoft365 integration"
+                sudo dnf group install -y "${GNOME_PACKAGES[@]}" || {
+                    warn "Failed to install GNOME components"
+                }
+                success "Installed KDE packages"
+                ;;
+            "DWM")
+                progress "Installing DWM dependencies"
+                sudo dnf install -y "${DWM_PACKAGES[@]}" || {
+                    error "Failed to install DWM dependencies"
+                }
+                install_dwm
+                success "Installed DWM dependencies"
+                ;;
+            "Hyprland")
+                progress "Installing Hyprland packages"
+                sudo dnf install -y "${HYPRLAND_PACKAGES[@]}" || {
+                    error "Failed to install Hyprland packages"
+                }
+                success "Installed Hyprland packages"
+                ;;
+        esac
+
+        # Verify neovim version after installation
+        check_neovim_version
+    }
+
+    # Function to configure services
+    configure_services() {
+        print_section "🔧 Configuring Services"
+
+        local SERVICES=(
+            NetworkManager
+            sddm
+            pipewire-pulse
+        )
+
+        for service in "${SERVICES[@]}"; do
+            progress "Enabling $service"
+            sudo systemctl enable "$service" > /dev/null 2>&1 || {
+                warn "Failed to enable $service"
+                continue
+            }
+            success "Enabled $service"
+        done
+
+        # Configure PipeWire
+        progress "Configuring PipeWire"
+        systemctl --user --now enable pipewire pipewire-pulse
+        success "Configured PipeWire"
+    }
+
+    # Function to configure SELinux
+    configure_selinux() {
+        print_section "🔒 Configuring SELinux"
+        
+        progress "Setting SELinux to permissive mode"
+        sudo setenforce 0
+        sudo sed -i 's/^SELINUX=.*$/SELINUX=permissive/' /etc/selinux/config
+        success "Set SELinux to permissive mode"
+    }
+
+    # Main Fedora installation function
+    install_fedora() {
+        check_fedora_version
+        setup_repositories
+        configure_dnf
+        install_packages
+        install_dev_tools
+        install_multimedia_codecs
+        configure_services
+        configure_selinux
+        configure_zram
+        update_firmware
+        cleanup_packages
+    }
+
+    # Run the installation
+    install_fedora
