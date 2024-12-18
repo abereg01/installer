@@ -16,202 +16,117 @@ BASE_PACKAGES=(
     sddm
     feh eza bat btop ripgrep unzip
     xtools
+    gparted
+    zram-generator
+    # Development tools
+    nodejs python3-pip python3-devel
+    docker docker-compose
 )
 
-# Desktop environment specific packages
-BSPWM_PACKAGES=(
-    bspwm sxhkd polybar rofi picom
-    dmenu
-)
+# Desktop environment specific packages (keep your existing definitions)
+# ... (BSPWM_PACKAGES, KDE_PACKAGES, DWM_PACKAGES, HYPRLAND_PACKAGES)
 
-KDE_PACKAGES=(
-    kde5
-    kde5-baseapps
-    plasma-desktop
-    dolphin konsole
-)
-
-DWM_PACKAGES=(
-    libX11-devel libXft-devel libXinerama-devel
-    xorg
-    make gcc
-)
-
-HYPRLAND_PACKAGES=(
-    hyprland
-    waybar wofi
-    grim slurp
-    wl-clipboard
-)
-
-# Function to enable non-free repository
-enable_nonfree() {
-    print_section "📦 Enabling Non-Free Repository"
+# Function to check system
+check_system() {
+    print_section "🔍 Checking System"
     
-    progress "Adding non-free repository"
-    sudo xbps-install -Sy void-repo-nonfree > /dev/null 2>&1 || {
-        error "Failed to enable non-free repository"
-    }
-    success "Enabled non-free repository"
-}
-
-# Function to check neovim version requirement
-check_neovim_version() {
-    print_section "🔍 Checking Neovim Version"
-    
-    progress "Verifying Neovim version"
-    local nvim_version=$(nvim --version | head -n1 | cut -d ' ' -f2)
-    local required_version="0.10.0"
-    
-    if [ "$(printf '%s\n' "$required_version" "$nvim_version" | sort -V | head -n1)" != "$required_version" ]; then
-        error "Neovim version must be at least 0.10.0. Found version: $nvim_version"
+    if ! [ -f /etc/void-release ]; then
+        error "This script requires Void Linux"
     fi
-    success "Neovim version requirement met: $nvim_version"
+    success "System check passed"
 }
 
-# Function to install starship
-install_starship() {
-    print_section "📦 Installing Starship"
+# Function to configure XBPS
+configure_xbps() {
+    print_section "🔧 Configuring XBPS"
     
-    progress "Downloading Starship installer"
-    curl -sS https://starship.rs/install.sh | sh > /dev/null 2>&1 || {
-        error "Failed to install Starship"
-    }
-    success "Installed Starship"
-}
-
-# Function to install DWM
-install_dwm() {
-    print_section "📦 Installing DWM"
+    # Create configuration directory
+    sudo mkdir -p /etc/xbps.d
     
-    progress "Cloning DWM repository"
-    git clone https://git.suckless.org/dwm /tmp/dwm || {
-        error "Failed to clone DWM"
-    }
+    # Configure parallel downloads
+    echo 'repository=https://alpha.de.repo.voidlinux.org/current' | sudo tee /etc/xbps.d/00-repository-main.conf
+    echo 'repository=https://alpha.de.repo.voidlinux.org/current/nonfree' | sudo tee /etc/xbps.d/10-repository-nonfree.conf
     
-    progress "Building DWM"
-    (cd /tmp/dwm && sudo make clean install) > /dev/null 2>&1 || {
-        error "Failed to build DWM"
-    }
+    success "Configured XBPS"
+}
+
+# Function to configure ZRAM
+configure_zram() {
+    print_section "🔧 Configuring ZRAM"
     
-    rm -rf /tmp/dwm
-    success "Built and installed DWM"
+    progress "Creating ZRAM configuration"
+    sudo tee /etc/systemd/zram-generator.conf > /dev/null << EOF
+[zram0]
+zram-size = ram / 2
+compression-algorithm = zstd
+swap-priority = 100
+EOF
+    
+    success "Configured ZRAM"
 }
 
-# Function to install Chrome
-install_chrome() {
-    print_section "📦 Installing Google Chrome"
-
-    progress "Downloading Chrome"
-    wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm -O /tmp/chrome.rpm || {
-        error "Failed to download Chrome"
-    }
-
-    progress "Converting RPM to XBPS package"
-    cd /tmp
-    rpm2xbps chrome.rpm || {
-        error "Failed to convert Chrome package"
-    }
-
-    progress "Installing Chrome"
-    sudo xbps-rindex -a chrome.xbps
-    sudo xbps-install -y chrome > /dev/null 2>&1 || {
-        error "Failed to install Chrome"
-    }
-
-    rm -f /tmp/chrome.rpm /tmp/chrome.xbps
-    success "Installed Google Chrome"
+# Function to update firmware
+update_firmware() {
+    print_section "🔄 Updating Firmware"
+    
+    progress "Installing fwupd"
+    sudo xbps-install -y fwupd
+    
+    progress "Checking for firmware updates"
+    sudo fwupdmgr get-devices
+    sudo fwupdmgr refresh
+    sudo fwupdmgr get-updates
+    
+    progress "Installing firmware updates"
+    sudo fwupdmgr update
+    success "Firmware update complete"
 }
 
-# Function to install packages
-install_packages() {
-    print_section "📦 Installing Packages"
-
-    # Update system first
-    progress "Updating system"
-    sudo xbps-install -Su > /dev/null 2>&1 || {
-        error "Failed to update system"
-    }
-    success "System updated"
-
-    # Install base packages
-    progress "Installing base packages"
-    sudo xbps-install -Sy "${BASE_PACKAGES[@]}" > /dev/null 2>&1 || {
-        error "Failed to install base packages"
-    }
-    success "Installed base packages"
-
-    # Install DE-specific packages
-    case "$DESKTOP_ENV" in
-        "BSPWM")
-            progress "Installing BSPWM packages"
-            sudo xbps-install -y "${BSPWM_PACKAGES[@]}" > /dev/null 2>&1 || {
-                error "Failed to install BSPWM packages"
-            }
-            success "Installed BSPWM packages"
-            ;;
-        "KDE")
-            progress "Installing KDE packages"
-            sudo xbps-install -y "${KDE_PACKAGES[@]}" > /dev/null 2>&1 || {
-                error "Failed to install KDE packages"
-            }
-            success "Installed KDE packages"
-            ;;
-        "DWM")
-            progress "Installing DWM dependencies"
-            sudo xbps-install -y "${DWM_PACKAGES[@]}" > /dev/null 2>&1 || {
-                error "Failed to install DWM dependencies"
-            }
-            install_dwm
-            ;;
-        "Hyprland")
-            progress "Installing Hyprland packages"
-            sudo xbps-install -y "${HYPRLAND_PACKAGES[@]}" > /dev/null 2>&1 || {
-                error "Failed to install Hyprland packages"
-            }
-            success "Installed Hyprland packages"
-            ;;
-    esac
-
-    # Install additional software
-    install_chrome
-    install_starship
-
-    # Verify neovim version after installation
-    check_neovim_version
+# Function to install development tools
+install_dev_tools() {
+    print_section "🛠️ Installing Development Tools"
+    
+    # Install VS Code
+    progress "Installing VS Code"
+    sudo xbps-install -y vscode
+    
+    # Install Python tools
+    progress "Installing Python development tools"
+    pip install --user pylint black mypy pytest
+    
+    # Install Node.js tools
+    progress "Installing Node.js development tools"
+    sudo npm install -g typescript ts-node eslint prettier
+    
+    success "Installed development tools"
 }
 
-# Function to configure services using runit
-configure_services() {
-    print_section "🔧 Configuring Services"
+# Keep your existing functions (install_starship, install_dwm, install_chrome)
+# ... (keep them as they are)
 
-    local SERVICES=(
-        NetworkManager
-        sddm
-        dbus
-    )
-
-    for service in "${SERVICES[@]}"; do
-        progress "Enabling $service"
-        sudo ln -s /etc/sv/$service /var/service/ > /dev/null 2>&1 || {
-            warn "Failed to enable $service"
-            continue
-        }
-        success "Enabled $service"
-    done
-
-    # Configure PipeWire
-    progress "Configuring PipeWire"
-    mkdir -p ~/.config/pipewire
-    cp /usr/share/pipewire/*.conf ~/.config/pipewire/ > /dev/null 2>&1
-    success "Configured PipeWire"
+# Function to cleanup packages
+cleanup_packages() {
+    print_section "🧹 Cleaning Up"
+    
+    progress "Removing unused packages"
+    sudo xbps-remove -O
+    
+    progress "Cleaning package cache"
+    sudo xbps-remove -y
+    success "Cleanup complete"
 }
 
 # Main Void installation function
 install_void() {
+    check_system
+    configure_xbps
     enable_nonfree
     install_packages
+    install_dev_tools
     configure_services
+    configure_zram
+    update_firmware
+    cleanup_packages
 }
 
 # Run the installation
