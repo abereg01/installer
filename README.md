@@ -78,34 +78,21 @@ chmod +x install.sh
 ## 🎨 Desktop Environments
 
 ### 🪟 BSPWM
-<div align="center">
-  <img src="/api/placeholder/800/200" alt="BSPWM Preview">
-</div>
-
 - 📱 Minimal and efficient
 - 🎯 Perfect for keyboard-driven workflow
 - ⚡ Lightning fast
 
 ### 💫 KDE Plasma
-
 - 🎨 Beautiful and customizable
 - 🔧 Feature-rich
 - 🖱️ User-friendly
 
 ### 🎯 DWM
-<div align="center">
-  <img src="/api/placeholder/800/200" alt="DWM Preview">
-</div>
-
 - ⚡ Blazing fast
 - 💪 Minimalist
 - 🛠️ Highly hackable
 
 ### ✨ Hyprland
-<div align="center">
-  <img src="/api/placeholder/800/200" alt="Hyprland Preview">
-</div>
-
 - 🌟 Modern animations
 - 📱 Wayland native
 - 🎮 GPU accelerated
