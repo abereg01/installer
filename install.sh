@@ -42,6 +42,10 @@ WALLPAPERS_REPO="git@github.com:abereg01/wallpapers.git"
 SCRIPTS_REPO="git@github.com:abereg01/scripts.git"
 THEMES_REPO="git@github.com:abereg01/themes.git"
 
+# Set USB path and SSH backup location
+USB_PATH="/run/media/andreas/YUMI"
+SSH_BACKUP="$USB_PATH/secure/.ssh"
+
 # Desktop Environment Options
 declare -A DE_OPTIONS=(
     ["1"]="BSPWM"
@@ -126,6 +130,23 @@ check_network() {
     else
         error "No internet connection available"
     fi
+}
+
+# Check for USB drive and SSH keys
+check_usb() {
+    print_section "🔑 Checking USB Drive"
+    
+    progress "Checking USB drive"
+    if [ ! -d "$USB_PATH" ]; then
+        error "USB drive not found at $USB_PATH"
+    fi
+    success "Found USB drive"
+
+    progress "Checking SSH keys"
+    if [ ! -d "$SSH_BACKUP" ]; then
+        error "SSH directory not found at $SSH_BACKUP"
+    fi
+    success "Found SSH keys"
 }
 
 # Select desktop environment
@@ -219,14 +240,7 @@ main() {
     # Initial checks
     check_prerequisites
     check_network
-    
-    # Get USB path for SSH keys
-    read -p "$(echo -e ${BOLD}${BLUE}$ARROW${NC} Enter USB path (e.g., /run/media/$USER/USB): )" USB_PATH
-    SSH_BACKUP="$USB_PATH/secure/.ssh"
-    
-    if [ ! -d "$SSH_BACKUP" ]; then
-        error "SSH directory not found at $SSH_BACKUP"
-    fi
+    check_usb
     
     # Select desktop environment
     select_desktop_environment
