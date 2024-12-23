@@ -157,12 +157,95 @@ select_disks() {
 prepare_disks() {
     print_section "💽 Preparing Disks"
     
+    # Show current configuration
+    echo -e "\n${BOLD}Selected configuration:${NC}"
+    echo -e "Root disk (@): ${BOLD}${ROOT_DISK}${NC}"
+    if [ "$HOME_DISK" = "$ROOT_DISK" ]; then
+        echo -e "Home (@home): ${BOLD}Same as root disk${NC}"
+    else
+        echo -e "Home (@home): ${BOLD}${HOME_DISK}${NC}"
+    fi
+    echo -e "Boot on root: ${BOLD}${BOOT_CHOICE}${NC}"
+    echo
+
+    # Get root size
+    while true; do
+        read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter size for ROOT in GB (e.g., 50): ")" ROOT_SIZE
+        if ! [[ "$ROOT_SIZE" =~ ^[0-9]+$ ]]; then
+            warn "Please enter a valid number"
+            continue
+        fi
+        # Verify size against disk capacity
+        local disk_size=$(lsblk -b -dn -o SIZE "$ROOT_DISK" | awk '{ printf "%.0f", $1/1024/1024/1024 }')
+        if [ "$ROOT_SIZE" -gt "$disk_size" ]; then
+            warn "Size exceeds disk capacity ($disk_size GB)"
+            continue
+        fi
+        break
+    done
+
+    # Get home size preference if on same disk
+    if [ "$HOME_DISK" = "$ROOT_DISK" ]; then
+        echo -e "\n${BOLD}HOME partition options:${NC}"
+        echo "1) Use remaining disk space (recommended)"
+        echo "2) Specify size in GB"
+        while true; do
+            read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Choose option [1-2]: ")" HOME_OPTION
+            case "$HOME_OPTION" in
+                1)
+                    HOME_PARAM="0"  # Use 0 to indicate "use rest of disk"
+                    break
+                    ;;
+                2)
+                    while true; do
+                        read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter size for HOME in GB: ")" HOME_SIZE
+                        if ! [[ "$HOME_SIZE" =~ ^[0-9]+$ ]]; then
+                            warn "Please enter a valid number"
+                            continue
+                        fi
+                        # Check if total size doesn't exceed disk
+                        local total_size=$((ROOT_SIZE + HOME_SIZE))
+                        if [ "$BOOT_CHOICE" = "yes" ]; then
+                            total_size=$((total_size + 1)) # Add 1GB for EFI
+                        fi
+                        if [ "$total_size" -gt "$disk_size" ]; then
+                            warn "Combined size exceeds disk capacity ($disk_size GB)"
+                            continue
+                        fi
+                        HOME_PARAM="+${HOME_SIZE}G"
+                        break
+                    done
+                    break
+                    ;;
+                *)
+                    warn "Invalid option. Please enter 1 or 2"
+                    ;;
+            esac
+        done
+    fi
+
     # Confirm before proceeding
+    echo -e "\n${BOLD}Partition layout to be created:${NC}"
+    if [[ "$BOOT_CHOICE" == "yes" ]]; then
+        echo "EFI:  1GB"
+    fi
+    echo "ROOT: ${ROOT_SIZE}GB"
+    if [ "$HOME_DISK" = "$ROOT_DISK" ]; then
+        if [ "$HOME_PARAM" = "0" ]; then
+            echo "HOME: Remaining space"
+        else
+            echo "HOME: ${HOME_SIZE}GB"
+        fi
+    else
+        echo "HOME: Entire separate disk"
+    fi
+    echo
     read -p "$(echo -e "${BOLD}${RED}$WARNING${NC} This will DESTROY ALL DATA on selected disks. Continue? [y/N]: ")" confirm
     if [[ ! "${confirm,,}" =~ ^(y|yes)$ ]]; then
         error "Operation cancelled by user"
     fi
 
+    # Start partitioning
     progress "Clearing disk signatures"
     wipefs -af "$ROOT_DISK" >/dev/null 2>&1
     if [ "$HOME_DISK" != "$ROOT_DISK" ]; then
@@ -176,32 +259,32 @@ prepare_disks() {
         sgdisk -Z "$ROOT_DISK" >/dev/null 2>&1
 
         if [ "$HOME_DISK" = "$ROOT_DISK" ]; then
-            # If home is on the same disk, create three partitions
+            # Three partitions: EFI, ROOT, HOME
             sgdisk -n 1:0:+1G -t 1:ef00 -c 1:"EFI" "$ROOT_DISK" >/dev/null 2>&1
-            sgdisk -n 2:0:+50G -t 2:8300 -c 2:"ROOT" "$ROOT_DISK" >/dev/null 2>&1  # Adjust size as needed
-            sgdisk -n 3:0:0 -t 3:8300 -c 3:"HOME" "$ROOT_DISK" >/dev/null 2>&1
+            sgdisk -n 2:0:+${ROOT_SIZE}G -t 2:8300 -c 2:"ROOT" "$ROOT_DISK" >/dev/null 2>&1
+            sgdisk -n 3:0:${HOME_PARAM} -t 3:8300 -c 3:"HOME" "$ROOT_DISK" >/dev/null 2>&1
             BOOT_PART="${ROOT_DISK}1"
             ROOT_PART="${ROOT_DISK}2"
             HOME_PART="${ROOT_DISK}3"
         else
-            # If home is on a different disk, create two partitions
-            sgdisk -n 1:0:+512M -t 1:ef00 -c 1:"EFI" "$ROOT_DISK" >/dev/null 2>&1
-            sgdisk -n 2:0:0 -t 2:8300 -c 2:"ROOT" "$ROOT_DISK" >/dev/null 2>&1
+            # Two partitions: EFI and ROOT
+            sgdisk -n 1:0:+1G -t 1:ef00 -c 1:"EFI" "$ROOT_DISK" >/dev/null 2>&1
+            sgdisk -n 2:0:+${ROOT_SIZE}G -t 2:8300 -c 2:"ROOT" "$ROOT_DISK" >/dev/null 2>&1
             BOOT_PART="${ROOT_DISK}1"
             ROOT_PART="${ROOT_DISK}2"
         fi
     else
-        # No boot partition needed
+        # No boot partition
         sgdisk -Z "$ROOT_DISK" >/dev/null 2>&1
         if [ "$HOME_DISK" = "$ROOT_DISK" ]; then
-            # Split disk for root and home
-            sgdisk -n 1:0:+50G -t 1:8300 -c 1:"ROOT" "$ROOT_DISK" >/dev/null 2>&1
-            sgdisk -n 2:0:0 -t 2:8300 -c 2:"HOME" "$ROOT_DISK" >/dev/null 2>&1
+            # Two partitions: ROOT and HOME
+            sgdisk -n 1:0:+${ROOT_SIZE}G -t 1:8300 -c 1:"ROOT" "$ROOT_DISK" >/dev/null 2>&1
+            sgdisk -n 2:0:${HOME_PARAM} -t 2:8300 -c 2:"HOME" "$ROOT_DISK" >/dev/null 2>&1
             ROOT_PART="${ROOT_DISK}1"
             HOME_PART="${ROOT_DISK}2"
         else
-            # Use entire disk for root
-            sgdisk -n 1:0:0 -t 1:8300 -c 1:"ROOT" "$ROOT_DISK" >/dev/null 2>&1
+            # Single ROOT partition
+            sgdisk -n 1:0:+${ROOT_SIZE}G -t 1:8300 -c 1:"ROOT" "$ROOT_DISK" >/dev/null 2>&1
             ROOT_PART="${ROOT_DISK}1"
         fi
     fi
@@ -227,6 +310,7 @@ prepare_disks() {
     mkfs.btrfs -f -L HOME "$HOME_PART" >/dev/null 2>&1
     success "Formatted partitions"
 }
+
 # Create and mount BTRFS subvolumes
 setup_btrfs() {
     print_section "🌲 Setting up BTRFS"
