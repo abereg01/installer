@@ -180,6 +180,18 @@ select_disks() {
     echo
 }
 
+# Helper function for partition device names
+get_partition_device() {
+    local disk=$1
+    local num=$2
+    
+    if [[ "$disk" == *"nvme"* ]]; then
+        echo "${disk}p${num}"
+    else
+        echo "${disk}${num}"
+    fi
+}
+
 # Partition and format disks
 prepare_disks() {
     print_section "💽 Preparing Disks"
@@ -290,29 +302,29 @@ prepare_disks() {
             sgdisk -n 1:0:+1G -t 1:ef00 -c 1:"EFI" "$ROOT_DISK" >/dev/null 2>&1
             sgdisk -n 2:0:+${ROOT_SIZE}G -t 2:8300 -c 2:"ROOT" "$ROOT_DISK" >/dev/null 2>&1
             sgdisk -n 3:0:${HOME_PARAM} -t 3:8300 -c 3:"HOME" "$ROOT_DISK" >/dev/null 2>&1
-            BOOT_PART="${ROOT_DISK}1"
-            ROOT_PART="${ROOT_DISK}2"
-            HOME_PART="${ROOT_DISK}3"
+            BOOT_PART=$(get_partition_device "$ROOT_DISK" "1")
+            ROOT_PART=$(get_partition_device "$ROOT_DISK" "2")
+            HOME_PART=$(get_partition_device "$ROOT_DISK" "3")
         else
             # Two partitions: EFI and ROOT
             sgdisk -n 1:0:+1G -t 1:ef00 -c 1:"EFI" "$ROOT_DISK" >/dev/null 2>&1
             sgdisk -n 2:0:+${ROOT_SIZE}G -t 2:8300 -c 2:"ROOT" "$ROOT_DISK" >/dev/null 2>&1
-            BOOT_PART="${ROOT_DISK}1"
-            ROOT_PART="${ROOT_DISK}2"
+            BOOT_PART=$(get_partition_device "$ROOT_DISK" "1")
+            ROOT_PART=$(get_partition_device "$ROOT_DISK" "2")
         fi
     else
-        # No boot partition
+        # No boot partition needed
         sgdisk -Z "$ROOT_DISK" >/dev/null 2>&1
         if [ "$HOME_DISK" = "$ROOT_DISK" ]; then
             # Two partitions: ROOT and HOME
             sgdisk -n 1:0:+${ROOT_SIZE}G -t 1:8300 -c 1:"ROOT" "$ROOT_DISK" >/dev/null 2>&1
             sgdisk -n 2:0:${HOME_PARAM} -t 2:8300 -c 2:"HOME" "$ROOT_DISK" >/dev/null 2>&1
-            ROOT_PART="${ROOT_DISK}1"
-            HOME_PART="${ROOT_DISK}2"
+            ROOT_PART=$(get_partition_device "$ROOT_DISK" "1")
+            HOME_PART=$(get_partition_device "$ROOT_DISK" "2")
         else
             # Single ROOT partition
             sgdisk -n 1:0:+${ROOT_SIZE}G -t 1:8300 -c 1:"ROOT" "$ROOT_DISK" >/dev/null 2>&1
-            ROOT_PART="${ROOT_DISK}1"
+            ROOT_PART=$(get_partition_device "$ROOT_DISK" "1")
         fi
     fi
     success "Partitioned root disk"
@@ -322,12 +334,18 @@ prepare_disks() {
         progress "Partitioning home disk"
         sgdisk -Z "$HOME_DISK" >/dev/null 2>&1
         sgdisk -n 1:0:0 -t 1:8300 -c 1:"HOME" "$HOME_DISK" >/dev/null 2>&1
-        HOME_PART="${HOME_DISK}1"
+        HOME_PART=$(get_partition_device "$HOME_DISK" "1")
         success "Partitioned home disk"
     fi
 
     # Wait for devices to settle
-    sleep 2
+    progress "Waiting for partitions to settle"
+    sleep 3
+    partprobe "$ROOT_DISK"
+    if [ "$HOME_DISK" != "$ROOT_DISK" ]; then
+        partprobe "$HOME_DISK"
+    fi
+    success "Partitions updated"
 
     progress "Formatting partitions"
     if [[ "$BOOT_CHOICE" == "yes" ]]; then
@@ -336,6 +354,9 @@ prepare_disks() {
     mkfs.btrfs -f -L ROOT "$ROOT_PART" >/dev/null 2>&1
     mkfs.btrfs -f -L HOME "$HOME_PART" >/dev/null 2>&1
     success "Formatted partitions"
+
+    # Additional wait after formatting
+    sleep 2
 }
 
 # Create and mount BTRFS subvolumes
