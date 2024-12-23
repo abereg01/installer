@@ -98,23 +98,32 @@ check_disk_size() {
 select_disks() {
     print_section "💽 Disk Selection"
     
+    # Get available disks and store in array
     echo -e "\n${BLUE}${BOLD}Available disks:${NC}"
-    lsblk -d -e 7,11 -o NAME,SIZE,MODEL
+    declare -a DISKS
+    while IFS= read -r line; do
+        DISKS+=("$line")
+    done < <(lsblk -d -e 7,11 -o NAME,SIZE,MODEL | tail -n +2)
+
+    # Print available disks with numbers
+    for i in "${!DISKS[@]}"; do
+        echo -e "$((i+1))) ${DISKS[$i]}"
+    done
     echo
 
     # Select root disk
     while true; do
-        read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter disk for root system (@) (e.g., sda): ")" ROOT_DISK
-        ROOT_DISK="/dev/${ROOT_DISK}"
-        
-        if [ ! -b "$ROOT_DISK" ]; then
-            warn "Invalid disk: $ROOT_DISK"
+        read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Choose disk number for root system (@): ")" ROOT_CHOICE
+        if ! [[ "$ROOT_CHOICE" =~ ^[0-9]+$ ]] || [ "$ROOT_CHOICE" -lt 1 ] || [ "$ROOT_CHOICE" -gt "${#DISKS[@]}" ]; then
+            warn "Please enter a valid number between 1 and ${#DISKS[@]}"
             continue
         fi
+        ROOT_DISK="/dev/$(echo "${DISKS[$ROOT_CHOICE-1]}" | awk '{print $1}')"
         
         if ! check_disk_size "$ROOT_DISK"; then
             continue
         fi
+        echo -e "Selected root disk: ${BOLD}${ROOT_DISK}${NC} (${DISKS[$ROOT_CHOICE-1]})"
         break
     done
 
@@ -127,18 +136,37 @@ select_disks() {
                 break
                 ;;
             n|no)
+                # Print available disks again, excluding root disk
+                echo -e "\n${BLUE}${BOLD}Available disks for home:${NC}"
+                local disk_counter=0
+                declare -a AVAILABLE_HOME_DISKS
+                for i in "${!DISKS[@]}"; do
+                    if [ "/dev/$(echo "${DISKS[$i]}" | awk '{print $1}')" != "$ROOT_DISK" ]; then
+                        disk_counter=$((disk_counter + 1))
+                        echo -e "$disk_counter)) ${DISKS[$i]}"
+                        AVAILABLE_HOME_DISKS+=("${DISKS[$i]}")
+                    fi
+                done
+
+                if [ $disk_counter -eq 0 ]; then
+                    warn "No other disks available. Using same disk for home."
+                    HOME_DISK="$ROOT_DISK"
+                    break
+                fi
+                
+                echo
                 while true; do
-                    read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter disk for home (@home) (e.g., sdb): ")" HOME_DISK_INPUT
-                    HOME_DISK="/dev/${HOME_DISK_INPUT}"
-                    
-                    if [ ! -b "$HOME_DISK" ]; then
-                        warn "Invalid disk: $HOME_DISK"
+                    read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Choose disk number for home (@home): ")" HOME_CHOICE
+                    if ! [[ "$HOME_CHOICE" =~ ^[0-9]+$ ]] || [ "$HOME_CHOICE" -lt 1 ] || [ "$HOME_CHOICE" -gt "$disk_counter" ]; then
+                        warn "Please enter a valid number between 1 and $disk_counter"
                         continue
                     fi
+                    HOME_DISK="/dev/$(echo "${AVAILABLE_HOME_DISKS[$HOME_CHOICE-1]}" | awk '{print $1}')"
                     
                     if ! check_disk_size "$HOME_DISK"; then
                         continue
                     fi
+                    echo -e "Selected home disk: ${BOLD}${HOME_DISK}${NC} (${AVAILABLE_HOME_DISKS[$HOME_CHOICE-1]})"
                     break
                 done
                 break
@@ -168,15 +196,16 @@ select_disks() {
         esac
     done
 
-    # Show selected configuration
-    echo -e "\n${BOLD}Selected configuration:${NC}"
-    echo -e "Root disk (@): ${BOLD}${ROOT_DISK}${NC}"
+    # Show final configuration
+    echo
+    print_section "Selected Configuration"
+    echo -e "Root disk (@):     ${BOLD}${ROOT_DISK}${NC}"
     if [ "$HOME_DISK" = "$ROOT_DISK" ]; then
-        echo -e "Home (@home): ${BOLD}Same as root disk${NC}"
+        echo -e "Home (@home):      ${BOLD}Same as root disk${NC}"
     else
-        echo -e "Home (@home): ${BOLD}${HOME_DISK}${NC}"
+        echo -e "Home (@home):      ${BOLD}${HOME_DISK}${NC}"
     fi
-    echo -e "Boot on root: ${BOLD}${BOOT_CHOICE}${NC}"
+    echo -e "Boot on root:      ${BOLD}${BOOT_CHOICE}${NC}"
     echo
 }
 
