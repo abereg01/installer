@@ -19,20 +19,45 @@ else
     ARROW="→"
 fi
 
+# Load user configuration
+if [ ! -f "/root/install_config" ]; then
+    error "Installation configuration not found"
+fi
+source /root/install_config
+
+# Load disk configuration
+if [ ! -f "/root/disk_config.txt" ]; then
+    error "Disk configuration not found"
+fi
+source /root/disk_config.txt
+
 # Detect graphics card
 detect_graphics() {
     print_section "🔍 Detecting Graphics Hardware"
     
+    # VM Detection
+    if systemd-detect-virt --vm &>/dev/null; then
+        success "Running in VM, using VMware/VirtualBox drivers"
+        echo "VMware / VirtualBox (open-source)"
+        return
+    fi
+    
+    # Hardware detection
     local gpu_info=$(lspci | grep -i vga)
+    progress "Detected GPU: $gpu_info"
     
     if [[ $gpu_info =~ "NVIDIA" ]]; then
-        echo "nvidia"
+        success "NVIDIA GPU detected, using proprietary drivers"
+        echo "NVIDIA (proprietary)"
     elif [[ $gpu_info =~ "AMD" ]] || [[ $gpu_info =~ "ATI" ]]; then
-        echo "amd"
+        success "AMD GPU detected, using open-source drivers"
+        echo "AMD / ATI (open-source)"
     elif [[ $gpu_info =~ "Intel" ]]; then
-        echo "intel"
+        success "Intel GPU detected, using open-source drivers"
+        echo "Intel (open-source)"
     else
-        echo "unknown"
+        warn "Unknown GPU, using default drivers"
+        echo "Default (open-source)"
     fi
 }
 
@@ -40,72 +65,11 @@ detect_graphics() {
 create_config() {
     print_section "📝 Creating Installation Configuration"
     
-    # VM Detection
-    progress "Checking if running in VM"
-    if systemd-detect-virt --vm &>/dev/null; then
-        local is_vm="true"
-        success "Running in VM"
-    else
-        local is_vm="false"
-        success "Running on hardware"
-    fi
-
-    # Graphics Configuration
-    if [ "$is_vm" = "true" ]; then
-        local graphics="VMware / VirtualBox (open-source)"
-    else
-        local gpu=$(detect_graphics)
-        case "$gpu" in
-            "nvidia")
-                local graphics="NVIDIA (proprietary)"
-                ;;
-            "amd")
-                local graphics="AMD / ATI (open-source)"
-                ;;
-            "intel")
-                local graphics="Intel (open-source)"
-                ;;
-            *)
-                local graphics="Default (open-source)"
-                ;;
-        esac
-    fi
-
-    # Get user input
-    echo
-    read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter hostname: ")" hostname
-    hostname=${hostname:-arch}
-
-    while true; do
-        read -s -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter root password: ")" root_password
-        echo
-        read -s -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Confirm root password: ")" root_password2
-        echo
-        if [ "$root_password" = "$root_password2" ]; then
-            break
-        fi
-        warn "Passwords don't match. Please try again."
-    done
-
-    read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter username: ")" username
-    while true; do
-        read -s -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter password for $username: ")" user_password
-        echo
-        read -s -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Confirm password: ")" user_password2
-        echo
-        if [ "$user_password" = "$user_password2" ]; then
-            break
-        fi
-        warn "Passwords don't match. Please try again."
-    done
-
-    # Load disk configuration
-    if [ ! -f "/root/disk_config.txt" ]; then
-        error "Disk configuration not found"
-    fi
-    source /root/disk_config.txt
+    # Detect graphics
+    local graphics=$(detect_graphics)
 
     # Create archinstall config
+    progress "Generating configuration file"
     cat > /root/archinstall.json << EOF
 {
     "additional-repositories": ["multilib"],
@@ -116,9 +80,10 @@ create_config() {
     "desktop-environment": null,
     "gfx_driver": "$graphics",
     "harddrives": [],
-    "hostname": "$hostname",
+    "hostname": "$HOSTNAME",
     "kernels": ["linux"],
-    "keyboard-language": "us",
+    "keyboard-languages": ["us", "se"],
+    "keyboard-layout": "us",
     "mirror-region": {
         "Sweden": {
             "http://ftp.acc.umu.se/mirror/archlinux/\$repo/os/\$arch": true,
@@ -149,17 +114,18 @@ EOF
     "nic": {"NetworkManager": true},
     "ntp": true,
     "profile": {"xorg": true},
-    "root-password": "$root_password",
+    "root-password": "$ROOT_PASSWORD",
     "swap": true,
     "sys-encoding": "utf-8",
     "sys-language": "en_US",
     "timezone": "Europe/Stockholm",
     "users": {
-        "$username": {
+        "$USERNAME": {
             "sudo": true,
-            "password": "$user_password"
+            "password": "$USER_PASSWORD"
         }
-    }
+    },
+    "packages": ["git"]
 }
 EOF
 
@@ -171,22 +137,25 @@ run_installation() {
     print_section "🚀 Running Arch Installation"
     
     progress "Starting installation"
-    archinstall --config /root/archinstall.json || error "Installation failed"
+    if ! archinstall --config /root/archinstall.json; then
+        error "Installation failed"
+    fi
     success "Installation completed"
 }
 
+# Copy SSH keys to new user's home
 copy_ssh_to_user() {
     print_section "🔑 Setting up User SSH Keys"
     
     if [ -d "/root/.ssh" ]; then
-        local user_home="/mnt/home/$username"
-        progress "Copying SSH keys to $username"
+        local user_home="/mnt/home/$USERNAME"
+        progress "Copying SSH keys to $USERNAME"
         mkdir -p "$user_home/.ssh"
         cp -r /root/.ssh/* "$user_home/.ssh/"
-        arch-chroot /mnt chown -R "$username:$username" "/home/$username/.ssh"
+        arch-chroot /mnt chown -R "$USERNAME:$USERNAME" "/home/$USERNAME/.ssh"
         chmod 700 "$user_home/.ssh"
-        chmod 600 "$user_home/.ssh/*"
-        success "SSH keys configured for $username"
+        chmod 600 "$user_home/.ssh/"*
+        success "SSH keys configured for $USERNAME"
     else
         warn "No SSH keys found in root. Keys will need to be set up manually."
     fi
@@ -197,8 +166,12 @@ main() {
     print_header
     create_config
     run_installation
-    copy_ssh_to_user
+    
+    if [[ "$COPY_SSH" =~ ^(y|yes)$ ]]; then
+        copy_ssh_to_user
+    fi
 }
 
-# Run the script
+# Run the script with error handling
+trap 'error "An error occurred. Check the output above for details."' ERR
 main
