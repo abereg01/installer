@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 # Version
 VERSION="1.0.0"
 
@@ -93,9 +92,52 @@ verify_aur_helper() {
     
     if ! command -v yay &>/dev/null; then
         progress "Installing yay"
-        git clone https://aur.archlinux.org/yay.git /tmp/yay
-        (cd /tmp/yay && makepkg -si --noconfirm)
+        # Create a temporary user for building packages
+        local build_user="makepkg_user"
+        useradd -m "$build_user" 2>/dev/null || {
+            error "Failed to create build user"
+            return 1
+        }
+        
+        # Store original working directory
+        local original_dir="$(pwd)"
+        
+        # Clone yay repository
+        cd /tmp
         rm -rf /tmp/yay
+        sudo -u "$build_user" git clone https://aur.archlinux.org/yay.git || {
+            error "Failed to clone yay repository"
+            userdel -r "$build_user"
+            return 1
+        }
+        cd yay
+        
+        # Give ownership to build user
+        chown -R "$build_user":"$build_user" . || {
+            error "Failed to change ownership"
+            cd ..
+            rm -rf yay
+            userdel -r "$build_user"
+            return 1
+        }
+        
+        # Build and install yay as the temporary user
+        sudo -u "$build_user" makepkg -si --noconfirm || {
+            error "Failed to build yay"
+            cd ..
+            rm -rf yay
+            userdel -r "$build_user"
+            return 1
+        }
+        
+        # Clean up
+        cd ..
+        rm -rf yay
+        userdel -r "$build_user"
+        
+        # Return to original directory
+        cd "$original_dir"
+        
         success "Installed yay"
     else
         success "yay already installed"
@@ -105,19 +147,16 @@ verify_aur_helper() {
 # Function to configure services
 configure_services() {
     print_section "🔧 Configuring Services"
-
     local services=(
         docker
         bluetooth
         cups
     )
-
     for service in "${services[@]}"; do
         progress "Enabling $service"
         sudo systemctl enable "$service" || warn "Failed to enable $service"
         success "Enabled $service"
     done
-
     # Add user to docker group
     sudo usermod -aG docker "$USER"
 }
@@ -158,11 +197,11 @@ cleanup_packages() {
 
 # Main Arch installation function
 install_arch() {
-    verify_aur_helper
-    verify_packages
-    configure_services
-    configure_zram
-    cleanup_packages
+    verify_aur_helper || return 1
+    verify_packages || return 1
+    configure_services || return 1
+    configure_zram || return 1
+    cleanup_packages || return 1
 }
 
 # Run the installation
