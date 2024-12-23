@@ -493,11 +493,30 @@ main() {
     check_prerequisites
     check_network
     
-    # Ask about SSH keys
-    read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Do you want to copy SSH keys from USB? [Y/n]: ")" copy_ssh
-    if [[ "${copy_ssh,,}" =~ ^(y|yes|)$ ]]; then
+    # Gather all user input first
+    gather_user_input
+    
+    # If SSH copy was requested, do it now
+    if [[ "$COPY_SSH" =~ ^(y|yes)$ ]]; then
         mount_usb_and_copy_ssh
     fi
+    
+    # Run BTRFS setup (which will also ask for disk configuration)
+    if [ -f "$SCRIPT_DIR/preinstall/arch/btrfs.sh" ]; then
+        bash "$SCRIPT_DIR/preinstall/arch/btrfs.sh" || error "BTRFS setup failed"
+        success "BTRFS setup completed"
+        
+        # Run Arch installation using saved configuration
+        if [ -f "$SCRIPT_DIR/preinstall/arch/archinstall.sh" ]; then
+            bash "$SCRIPT_DIR/preinstall/arch/archinstall.sh" || error "Arch installation failed"
+            success "Arch installation completed"
+        else
+            error "archinstall.sh not found"
+        fi
+    else
+        error "btrfs.sh not found"
+    fi
+}
     
     # Initial checks
     check_script_permissions
