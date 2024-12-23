@@ -330,7 +330,8 @@ select_desktop_environment() {
     print_section "🖥️  Desktop Environment Selection"
     
     echo -e "${BOLD}Available Desktop Environments:${NC}"
-    for key in "${!DE_OPTIONS[@]}"; do
+    # Sort the keys numerically before printing
+    for key in $(echo "${!DE_OPTIONS[@]}" | tr ' ' '\n' | sort -n); do
         echo -e "${BLUE}$key${NC}) ${DE_OPTIONS[$key]}"
     done
     echo
