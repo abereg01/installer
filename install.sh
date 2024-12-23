@@ -408,7 +408,7 @@ main() {
        . /etc/os-release
        case "$ID" in
            "arch")
-               if [ -f /etc/archiso-release ]; then
+               if [ -f /etc/arch-release ] && ! [ -f /etc/hostname ]; then
                    progress "Starting Arch Linux installation"
                    gather_user_input
                    
