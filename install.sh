@@ -568,6 +568,7 @@ main() {
 
 # Run the installer with error handling
 if [ "${BASH_SOURCE[0]}" -ef "$0" ]; then
-    trap 'error "An error occurred. Check /tmp/installer_log for details."' ERR
+    set -E  # Inherit ERR trap by shell functions
+    trap 'echo "Error on line $LINENO. Check log at $LOG_FILE"; exit 1' ERR
     main "$@"
 fi
