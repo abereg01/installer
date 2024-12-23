@@ -68,7 +68,7 @@ if [ "$ID" == "arch" ]; then
             error "btrfs.sh not found"
         fi
     fi
-}
+fi
 
 # Desktop Environment Options (keeping your existing ones)
 declare -A DE_OPTIONS=(
