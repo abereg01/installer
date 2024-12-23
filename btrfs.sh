@@ -157,42 +157,64 @@ select_disks() {
 prepare_disks() {
     print_section "💽 Preparing Disks"
     
-    # Confirm disk selections
-    echo -e "\nSelected configuration:"
-    echo -e "Root disk: ${BOLD}${ROOT_DISK}${NC}"
-    echo -e "Home disk: ${BOLD}${HOME_DISK}${NC}"
-    echo -e "Boot on root disk: ${BOLD}${BOOT_CHOICE}${NC}"
-    echo
+    # Confirm before proceeding
     read -p "$(echo -e "${BOLD}${RED}$WARNING${NC} This will DESTROY ALL DATA on selected disks. Continue? [y/N]: ")" confirm
-    
     if [[ ! "${confirm,,}" =~ ^(y|yes)$ ]]; then
         error "Operation cancelled by user"
     fi
 
     progress "Clearing disk signatures"
     wipefs -af "$ROOT_DISK" >/dev/null 2>&1
-    wipefs -af "$HOME_DISK" >/dev/null 2>&1
+    if [ "$HOME_DISK" != "$ROOT_DISK" ]; then
+        wipefs -af "$HOME_DISK" >/dev/null 2>&1
+    fi
     success "Cleared disk signatures"
 
     progress "Partitioning root disk"
     if [[ "$BOOT_CHOICE" == "yes" ]]; then
+        # Create GPT partition table
         sgdisk -Z "$ROOT_DISK" >/dev/null 2>&1
-        sgdisk -n 1:0:+512M -t 1:ef00 -c 1:"EFI" "$ROOT_DISK" >/dev/null 2>&1
-        sgdisk -n 2:0:0 -t 2:8300 -c 2:"ROOT" "$ROOT_DISK" >/dev/null 2>&1
-        BOOT_PART="${ROOT_DISK}1"
-        ROOT_PART="${ROOT_DISK}2"
+
+        if [ "$HOME_DISK" = "$ROOT_DISK" ]; then
+            # If home is on the same disk, create three partitions
+            sgdisk -n 1:0:+1G -t 1:ef00 -c 1:"EFI" "$ROOT_DISK" >/dev/null 2>&1
+            sgdisk -n 2:0:+50G -t 2:8300 -c 2:"ROOT" "$ROOT_DISK" >/dev/null 2>&1  # Adjust size as needed
+            sgdisk -n 3:0:0 -t 3:8300 -c 3:"HOME" "$ROOT_DISK" >/dev/null 2>&1
+            BOOT_PART="${ROOT_DISK}1"
+            ROOT_PART="${ROOT_DISK}2"
+            HOME_PART="${ROOT_DISK}3"
+        else
+            # If home is on a different disk, create two partitions
+            sgdisk -n 1:0:+512M -t 1:ef00 -c 1:"EFI" "$ROOT_DISK" >/dev/null 2>&1
+            sgdisk -n 2:0:0 -t 2:8300 -c 2:"ROOT" "$ROOT_DISK" >/dev/null 2>&1
+            BOOT_PART="${ROOT_DISK}1"
+            ROOT_PART="${ROOT_DISK}2"
+        fi
     else
+        # No boot partition needed
         sgdisk -Z "$ROOT_DISK" >/dev/null 2>&1
-        sgdisk -n 1:0:0 -t 1:8300 -c 1:"ROOT" "$ROOT_DISK" >/dev/null 2>&1
-        ROOT_PART="${ROOT_DISK}1"
+        if [ "$HOME_DISK" = "$ROOT_DISK" ]; then
+            # Split disk for root and home
+            sgdisk -n 1:0:+50G -t 1:8300 -c 1:"ROOT" "$ROOT_DISK" >/dev/null 2>&1
+            sgdisk -n 2:0:0 -t 2:8300 -c 2:"HOME" "$ROOT_DISK" >/dev/null 2>&1
+            ROOT_PART="${ROOT_DISK}1"
+            HOME_PART="${ROOT_DISK}2"
+        else
+            # Use entire disk for root
+            sgdisk -n 1:0:0 -t 1:8300 -c 1:"ROOT" "$ROOT_DISK" >/dev/null 2>&1
+            ROOT_PART="${ROOT_DISK}1"
+        fi
     fi
     success "Partitioned root disk"
 
-    progress "Partitioning home disk"
-    sgdisk -Z "$HOME_DISK" >/dev/null 2>&1
-    sgdisk -n 1:0:0 -t 1:8300 -c 1:"HOME" "$HOME_DISK" >/dev/null 2>&1
-    HOME_PART="${HOME_DISK}1"
-    success "Partitioned home disk"
+    # Only partition home disk if it's different from root
+    if [ "$HOME_DISK" != "$ROOT_DISK" ]; then
+        progress "Partitioning home disk"
+        sgdisk -Z "$HOME_DISK" >/dev/null 2>&1
+        sgdisk -n 1:0:0 -t 1:8300 -c 1:"HOME" "$HOME_DISK" >/dev/null 2>&1
+        HOME_PART="${HOME_DISK}1"
+        success "Partitioned home disk"
+    fi
 
     # Wait for devices to settle
     sleep 2
@@ -205,7 +227,6 @@ prepare_disks() {
     mkfs.btrfs -f -L HOME "$HOME_PART" >/dev/null 2>&1
     success "Formatted partitions"
 }
-
 # Create and mount BTRFS subvolumes
 setup_btrfs() {
     print_section "🌲 Setting up BTRFS"
