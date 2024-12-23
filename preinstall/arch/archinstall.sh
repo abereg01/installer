@@ -175,11 +175,29 @@ run_installation() {
     success "Installation completed"
 }
 
+copy_ssh_to_user() {
+    print_section "🔑 Setting up User SSH Keys"
+    
+    if [ -d "/root/.ssh" ]; then
+        local user_home="/mnt/home/$username"
+        progress "Copying SSH keys to $username"
+        mkdir -p "$user_home/.ssh"
+        cp -r /root/.ssh/* "$user_home/.ssh/"
+        arch-chroot /mnt chown -R "$username:$username" "/home/$username/.ssh"
+        chmod 700 "$user_home/.ssh"
+        chmod 600 "$user_home/.ssh/*"
+        success "SSH keys configured for $username"
+    else
+        warn "No SSH keys found in root. Keys will need to be set up manually."
+    fi
+}
+
 # Main function
 main() {
     print_header
     create_config
     run_installation
+    copy_ssh_to_user
 }
 
 # Run the script
