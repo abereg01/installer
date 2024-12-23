@@ -25,15 +25,6 @@ WARNING="⚠"
 # Get terminal width
 TERM_WIDTH=$(tput cols)
 
-# Required tools
-REQUIRED_TOOLS=(
-    "sgdisk"
-    "mkfs.btrfs"
-    "mkfs.fat"
-    "arch-chroot"
-    "lsblk"
-)
-
 # Function to print centered text
 print_centered() {
     local text="$1"
@@ -95,61 +86,29 @@ check_installation_media() {
     fi
 }
 
-# Function to check required tools
-check_requirements() {
-    print_section "🔍 Checking Requirements"
-    
-    local missing_tools=()
-    
-    for tool in "${REQUIRED_TOOLS[@]}"; do
-        progress "Checking for $tool"
-        if ! command -v "$tool" >/dev/null 2>&1; then
-            missing_tools+=("$tool")
-            error "$tool not found" "no_exit"
-        else
-            success "Found $tool"
-        fi
-    done
-    
-    if [ ${#missing_tools[@]} -ne 0 ]; then
-        error "Missing required tools: ${missing_tools[*]}"
-    fi
-}
-
-# Function to verify UEFI boot mode
-check_uefi() {
-    print_section "🔍 Checking Boot Mode"
-    
-    progress "Verifying UEFI boot mode"
-    if [ ! -d "/sys/firmware/efi/efivars" ]; then
-        error "System not booted in UEFI mode"
-    fi
-    success "UEFI boot mode confirmed"
-}
-
-# Function to check disk size
+# Function to check disk size using lsblk
 check_disk_size() {
     local disk=$1
-    local min_size=$((30*1024*1024*1024)) # 30GB in bytes
+    local min_size=30 # 30GB
+
+    # Get size in GB using lsblk
+    local size=$(lsblk -b -dn -o SIZE "$disk" | awk '{ print int($1/1024/1024/1024) }')
     
-    local size=$(blockdev --getsize64 "$disk")
     if [ "$size" -lt "$min_size" ]; then
-        error "Disk $disk is smaller than 30GB" "no_exit"
+        error "Disk $disk is smaller than 30GB (size: ${size}GB)" "no_exit"
         return 1
     fi
     return 0
 }
 
-# Enhanced disk selection function
+# Disk selection function
 select_disks() {
-    print_section "💽 Disk Selection"
-    
     echo -e "\n${BLUE}${BOLD}Available disks:${NC}"
     lsblk -d -e 7,11 -o NAME,SIZE,MODEL
     echo
-    
+
     while true; do
-        read -p "$(echo -e ${BOLD}${BLUE}$ARROW${NC} Enter disk for root system (@) (e.g., sda): )" ROOT_DISK
+        read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter disk for root system (@) (e.g., sda): ")" ROOT_DISK
         ROOT_DISK="/dev/${ROOT_DISK}"
         
         if [ ! -b "$ROOT_DISK" ]; then
@@ -162,9 +121,9 @@ select_disks() {
         fi
         break
     done
-    
+
     while true; do
-        read -p "$(echo -e ${BOLD}${BLUE}$ARROW${NC} Enter disk for home (@home) (e.g., sdb): )" HOME_DISK
+        read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter disk for home (@home) (e.g., sdb): ")" HOME_DISK
         HOME_DISK="/dev/${HOME_DISK}"
         
         if [ "$HOME_DISK" = "$ROOT_DISK" ]; then
@@ -182,9 +141,9 @@ select_disks() {
         fi
         break
     done
-    
+
     while true; do
-        read -p "$(echo -e ${BOLD}${BLUE}$ARROW${NC} Should boot partition be on the root disk? [Y/n]: )" BOOT_CHOICE
+        read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Should boot partition be on the root disk? [Y/n]: ")" BOOT_CHOICE
         case "${BOOT_CHOICE,,}" in
             ""|y|yes) 
                 BOOT_CHOICE="yes"
@@ -201,9 +160,9 @@ select_disks() {
     done
 }
 
-# Enhanced disk preparation function
+# Partition and format disks
 prepare_disks() {
-    print_section "🔧 Preparing Disks"
+    print_section "💽 Preparing Disks"
     
     # Confirm disk selections
     echo -e "\nSelected configuration:"
@@ -211,17 +170,17 @@ prepare_disks() {
     echo -e "Home disk: ${BOLD}${HOME_DISK}${NC}"
     echo -e "Boot on root disk: ${BOLD}${BOOT_CHOICE}${NC}"
     echo
-    read -p "$(echo -e ${BOLD}${RED}$WARNING${NC} This will DESTROY ALL DATA on selected disks. Continue? [y/N]: )" confirm
+    read -p "$(echo -e "${BOLD}${RED}$WARNING${NC} This will DESTROY ALL DATA on selected disks. Continue? [y/N]: ")" confirm
     
     if [[ ! "${confirm,,}" =~ ^(y|yes)$ ]]; then
         error "Operation cancelled by user"
     fi
-    
+
     progress "Clearing disk signatures"
     wipefs -af "$ROOT_DISK" >/dev/null 2>&1
     wipefs -af "$HOME_DISK" >/dev/null 2>&1
     success "Cleared disk signatures"
-    
+
     progress "Partitioning root disk"
     if [[ "$BOOT_CHOICE" == "yes" ]]; then
         sgdisk -Z "$ROOT_DISK" >/dev/null 2>&1
@@ -235,16 +194,16 @@ prepare_disks() {
         ROOT_PART="${ROOT_DISK}1"
     fi
     success "Partitioned root disk"
-    
+
     progress "Partitioning home disk"
     sgdisk -Z "$HOME_DISK" >/dev/null 2>&1
     sgdisk -n 1:0:0 -t 1:8300 -c 1:"HOME" "$HOME_DISK" >/dev/null 2>&1
     HOME_PART="${HOME_DISK}1"
     success "Partitioned home disk"
-    
+
     # Wait for devices to settle
     sleep 2
-    
+
     progress "Formatting partitions"
     if [[ "$BOOT_CHOICE" == "yes" ]]; then
         mkfs.fat -F32 "$BOOT_PART" >/dev/null 2>&1
@@ -254,7 +213,7 @@ prepare_disks() {
     success "Formatted partitions"
 }
 
-# Enhanced BTRFS setup function
+# Create and mount BTRFS subvolumes
 setup_btrfs() {
     print_section "🌲 Setting up BTRFS"
     
@@ -285,7 +244,6 @@ setup_btrfs() {
     mount -o compress=zstd,space_cache=v2,noatime,ssd,discard=async "$HOME_PART" /mnt/home
     success "Mounted all subvolumes"
     
-    # Verify mounts
     progress "Verifying mount points"
     if ! findmnt /mnt >/dev/null || \
        ! findmnt /mnt/.snapshots >/dev/null || \
@@ -311,8 +269,6 @@ generate_fstab_template() {
 create_post_install_config() {
     print_section "⚙️ Creating Post-install Configuration"
     
-    # Create pacman hook directory
-    progress "Creating pacman hooks"
     mkdir -p /mnt/etc/pacman.d/hooks
     
     # Create snapshot hook
@@ -420,8 +376,6 @@ main() {
     # Initial checks
     check_root
     check_installation_media
-    check_requirements
-    check_uefi
     
     # Get disk configuration
     select_disks
@@ -440,7 +394,7 @@ main() {
     
     # Ask to create rescue point
     echo
-    read -p "$(echo -e ${BOLD}${BLUE}$ARROW${NC} Would you like to install timeshift and create a rescue point now? [Y/n]: )" rescue_choice
+    read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Would you like to install timeshift and create a rescue point now? [Y/n]: ")" rescue_choice
     if [[ "${rescue_choice,,}" =~ ^(y|yes|)$ ]]; then
         create_rescue_point
     fi
