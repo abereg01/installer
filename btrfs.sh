@@ -79,13 +79,6 @@ check_root() {
     fi
 }
 
-# Function to check if running from installation media
-check_installation_media() {
-    if [ ! -f /etc/archiso-release ]; then
-        error "This script must be run from Arch Linux installation media"
-    fi
-}
-
 # Function to check disk size using lsblk
 check_disk_size() {
     local disk=$1
