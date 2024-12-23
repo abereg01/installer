@@ -3,7 +3,7 @@
 # Script version
 VERSION="1.0.0"
 
-# Colors and styling (keeping your existing scheme)
+# Colors and styling
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
@@ -15,7 +15,7 @@ DIM='\033[2m'
 ITALIC='\033[3m'
 NC='\033[0m'
 
-# Unicode symbols (keeping your existing ones)
+# Unicode symbols
 CHECK_MARK="\033[0;32m✓\033[0m"
 CROSS_MARK="\033[0;31m✗\033[0m"
 ARROW="→"
@@ -27,151 +27,23 @@ DOWNLOAD="📥"
 # Get terminal width
 TERM_WIDTH=$(tput cols)
 
-# Script directories (keeping your existing structure)
+# Script directories
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HOME_DIR="$HOME"
-CONFIG_DIR="$HOME_DIR/.config"
-DOTFILES_DIR="$HOME_DIR/dotfiles"
-SCRIPTS_DIR="$HOME_DIR/lib/scripts"
-IMAGES_DIR="$HOME_DIR/lib/images"
-THEMES_DIR="$HOME_DIR/.themes"
-SSH_DIR="$HOME_DIR/.ssh"
 
-# Repository URLs (keeping your existing ones)
+# Set config directory based on environment
+if [ -f /etc/archiso-release ]; then
+    CONFIG_DIR="/root/.config"
+else
+    CONFIG_DIR="$HOME/.config"
+fi
+
+# Repository URLs
 DOTFILES_REPO="git@github.com:abereg01/dotfiles.git"
 WALLPAPERS_REPO="git@github.com:abereg01/wallpapers.git"
 SCRIPTS_REPO="git@github.com:abereg01/scripts.git"
 THEMES_REPO="git@github.com:abereg01/themes.git"
 
-mount_usb_and_copy_ssh() {
-    print_section "🔑 Setting up SSH Keys"
-    
-    # Find USB drive
-    progress "Detecting installation USB"
-    local usb_device=""
-    while read -r device; do
-        if mount | grep -q "^$device"; then
-            # Skip if already mounted
-            continue
-        fi
-        if file -s "$device" | grep -qi "fat\|iso9660"; then
-            usb_device="$device"
-            break
-        fi
-    done < <(lsblk -pnl -o NAME | grep -E 'sd[a-z][0-9]|nvme[0-9]n[0-9]p[0-9]')
-
-    if [ -z "$usb_device" ]; then
-        error "Could not find USB device" "no_exit"
-        return 1
-    fi
-    success "Found USB device: $usb_device"
-
-    # Create mount point
-    local mount_point="/mnt/usb"
-    mkdir -p "$mount_point"
-
-    # Mount USB
-    progress "Mounting USB"
-    if ! mount "$usb_device" "$mount_point"; then
-        error "Failed to mount USB" "no_exit"
-        return 1
-    fi
-    success "Mounted USB"
-
-    # Copy SSH keys
-    progress "Copying SSH keys"
-    if [ -d "$mount_point/secure/.ssh" ]; then
-        mkdir -p /root/.ssh
-        cp -r "$mount_point/secure/.ssh/"* /root/.ssh/
-        chmod 700 /root/.ssh
-        chmod 600 /root/.ssh/*
-        success "SSH keys copied"
-    else
-        error "SSH directory not found on USB" "no_exit"
-        return 1
-    fi
-
-    # Unmount USB
-    umount "$mount_point"
-    rm -r "$mount_point"
-}
-
-if [ "$ID" == "arch" ]; then
-    print_section "🚀 Arch Linux Pre-installation"
-    
-    # Check if we're in the installation environment
-    if [ -f /etc/archiso-release ]; then
-        progress "Running BTRFS setup"
-        if [ -f "$SCRIPT_DIR/preinstall/arch/btrfs.sh" ]; then
-            bash "$SCRIPT_DIR/preinstall/arch/btrfs.sh" || error "BTRFS setup failed"
-            success "BTRFS setup completed"
-            
-            progress "Running Arch installation"
-            if [ -f "$SCRIPT_DIR/preinstall/arch/archinstall.sh" ]; then
-                bash "$SCRIPT_DIR/preinstall/arch/archinstall.sh" || error "Arch installation failed"
-                success "Arch installation completed"
-            else
-                error "archinstall.sh not found"
-            fi
-        else
-            error "btrfs.sh not found"
-        fi
-    fi
-fi
-
-gather_user_input() {
-    print_section "📝 Installation Configuration"
-
-    # SSH Keys
-    read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Do you want to copy SSH keys from USB? [Y/n]: ")" copy_ssh
-    export COPY_SSH="${copy_ssh,,}"
-
-    # Hostname
-    read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter hostname: ")" hostname
-    export HOSTNAME=${hostname:-arch}
-
-    # Root password
-    while true; do
-        read -s -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter root password: ")" root_password
-        echo
-        read -s -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Confirm root password: ")" root_password2
-        echo
-        if [ "$root_password" = "$root_password2" ]; then
-            export ROOT_PASSWORD="$root_password"
-            break
-        fi
-        warn "Passwords don't match. Please try again."
-    done
-
-    # User account
-    read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter username: ")" username
-    export USERNAME="$username"
-    
-    while true; do
-        read -s -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter password for $username: ")" user_password
-        echo
-        read -s -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Confirm password: ")" user_password2
-        echo
-        if [ "$user_password" = "$user_password2" ]; then
-            export USER_PASSWORD="$user_password"
-            break
-        fi
-        warn "Passwords don't match. Please try again."
-    done
-
-    # Save configuration
-    cat > /root/install_config << EOF
-COPY_SSH="$COPY_SSH"
-HOSTNAME="$HOSTNAME"
-USERNAME="$USERNAME"
-ROOT_PASSWORD="$ROOT_PASSWORD"
-USER_PASSWORD="$USER_PASSWORD"
-EOF
-
-    success "Configuration saved"
-}
-
-# Desktop Environment Options (keeping your existing ones)
+# Desktop Environment Options
 declare -A DE_OPTIONS=(
     ["1"]="BSPWM"
     ["2"]="KDE"
@@ -179,7 +51,7 @@ declare -A DE_OPTIONS=(
     ["4"]="Hyprland"
 )
 
-# Required tools for the script
+# Required tools
 REQUIRED_TOOLS=(
     "git"
     "curl"
@@ -187,14 +59,21 @@ REQUIRED_TOOLS=(
     "rsync"
 )
 
-# Function to print centered text (keeping your existing one)
+setup_logging() {
+    LOG_FILE="/root/installer_$(date +%Y%m%d_%H%M%S).log"
+    touch "$LOG_FILE"
+    chmod 644 "$LOG_FILE"
+    exec 1> >(tee -a "$LOG_FILE")
+    exec 2> >(tee -a "$LOG_FILE" >&2)
+    echo "Installation log started at $(date)"
+}
+
 print_centered() {
     local text="$1"
     local width=$((($TERM_WIDTH - ${#text}) / 2))
     printf "%${width}s%s%${width}s\n" "" "$text" ""
 }
 
-# Function to print header (enhanced version of yours)
 print_header() {
     clear
     echo -e "${BOLD}${BLUE}"
@@ -206,14 +85,12 @@ print_header() {
     echo
 }
 
-# Function to print section header (keeping your existing one)
 print_section() {
     echo
     echo -e "${CYAN}${BOLD}$1${NC}"
     echo -e "${DIM}$(printf '%.s─' $(seq 1 $TERM_WIDTH))${NC}"
 }
 
-# Enhanced progress and status functions (building on your existing ones)
 progress() {
     echo -ne "${ITALIC}${DIM}$1...${NC}"
 }
@@ -233,12 +110,10 @@ warn() {
     echo -e "\r${YELLOW}⚠ WARNING:${NC} $1"
 }
 
-# Enhanced prerequisites check (building on your existing one)
 check_prerequisites() {
     print_section "🔍 Checking Prerequisites"
     
     local missing_tools=()
-    
     for tool in "${REQUIRED_TOOLS[@]}"; do
         progress "Checking for $tool"
         if ! command -v "$tool" &> /dev/null; then
@@ -255,7 +130,6 @@ check_prerequisites() {
     success "All prerequisites met"
 }
 
-# Enhanced network check
 check_network() {
     print_section "🌐 Checking Network Connection"
     
@@ -278,28 +152,123 @@ verify_ssh() {
     return 0
 }
 
-# Enhanced USB check (building on your existing one)
-check_usb() {
-    print_section "🔑 Checking USB Drive"
+mount_usb_and_copy_ssh() {
+    print_section "🔑 Setting up SSH Keys"
     
-    progress "Checking USB drive"
-    if [ ! -d "$USB_PATH" ]; then
-        error "USB drive not found at $USB_PATH"
+    progress "Detecting installation USB"
+    local usb_device=""
+    while read -r device; do
+        if mount | grep -q "^$device"; then
+            continue
+        fi
+        if file -s "$device" | grep -qi "fat\|iso9660"; then
+            usb_device="$device"
+            break
+        fi
+    done < <(lsblk -pnl -o NAME | grep -E 'sd[a-z][0-9]|nvme[0-9]n[0-9]p[0-9]')
+
+    if [ -z "$usb_device" ]; then
+        error "Could not find USB device" "no_exit"
+        return 1
     fi
-    success "Found USB drive"
+    success "Found USB device: $usb_device"
+
+    local mount_point="/mnt/usb"
+    mkdir -p "$mount_point"
+
+    progress "Mounting USB"
+    if ! mount "$usb_device" "$mount_point"; then
+        error "Failed to mount USB" "no_exit"
+        return 1
+    fi
+    success "Mounted USB"
+
+    progress "Copying SSH keys"
+    if [ -d "$mount_point/secure/.ssh" ]; then
+        mkdir -p /root/.ssh
+        cp -r "$mount_point/secure/.ssh/"* /root/.ssh/
+        chmod 700 /root/.ssh
+        chmod 600 /root/.ssh/*
+        success "SSH keys copied"
+    else
+        error "SSH directory not found on USB" "no_exit"
+        return 1
+    fi
+
+    umount "$mount_point"
+    rm -r "$mount_point"
+}
+
+gather_user_input() {
+    print_section "📝 Installation Configuration"
+
+    read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Do you want to copy SSH keys from USB? [Y/n]: ")" copy_ssh
+    export COPY_SSH="${copy_ssh,,}"
+
+    read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter hostname: ")" hostname
+    export HOSTNAME=${hostname:-arch}
+
+    while true; do
+        read -s -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter root password: ")" root_password
+        echo
+        read -s -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Confirm root password: ")" root_password2
+        echo
+        if [ "$root_password" = "$root_password2" ]; then
+            export ROOT_PASSWORD="$root_password"
+            break
+        fi
+        warn "Passwords don't match. Please try again."
+    done
+
+    read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter username: ")" username
+    export USERNAME="$username"
     
-    progress "Checking SSH keys"
-    if [ ! -d "$SSH_BACKUP" ]; then
-        error "SSH directory not found at $SSH_BACKUP"
-    fi
-    success "Found SSH keys"
+    while true; do
+        read -s -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter password for $username: ")" user_password
+        echo
+        read -s -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Confirm password: ")" user_password2
+        echo
+        if [ "$user_password" = "$user_password2" ]; then
+            export USER_PASSWORD="$user_password"
+            break
+        fi
+        warn "Passwords don't match. Please try again."
+    done
+
+    cat > /root/install_config << EOF
+COPY_SSH="$COPY_SSH"
+HOSTNAME="$HOSTNAME"
+USERNAME="$USERNAME"
+ROOT_PASSWORD="$ROOT_PASSWORD"
+USER_PASSWORD="$USER_PASSWORD"
+EOF
+
+    success "Configuration saved"
+}
+
+select_desktop_environment() {
+    print_section "🖥️  Desktop Environment Selection"
     
-    # Additional permission checks
-    progress "Checking USB permissions"
-    if [ ! -r "$USB_PATH" ] || [ ! -w "$USB_PATH" ]; then
-        error "Insufficient permissions on USB drive"
-    fi
-    success "USB permissions verified"
+    echo -e "${BOLD}Available Desktop Environments:${NC}"
+    for key in $(echo "${!DE_OPTIONS[@]}" | tr ' ' '\n' | sort -n); do
+        echo -e "${BLUE}$key${NC}) ${DE_OPTIONS[$key]}"
+    done
+    echo
+    
+    local selected_de=""
+    while [ -z "$selected_de" ]; do
+        read -p "$(echo -e ${BOLD}${BLUE}$ARROW${NC} Select desktop environment [1-4]: )" de_choice
+        if [[ -n "${DE_OPTIONS[$de_choice]}" ]]; then
+            selected_de="${DE_OPTIONS[$de_choice]}"
+            success "Selected $selected_de"
+        else
+            warn "Invalid selection. Please try again."
+        fi
+    done
+    
+    mkdir -p "$CONFIG_DIR"
+    export DESKTOP_ENV="$selected_de"
+    echo "DESKTOP_ENV=$selected_de" > "$CONFIG_DIR/de_config"
 }
 
 check_script_permissions() {
@@ -325,34 +294,6 @@ check_script_permissions() {
     done
 }
 
-# Enhanced DE selection (building on your existing one)
-select_desktop_environment() {
-    print_section "🖥️  Desktop Environment Selection"
-    
-    echo -e "${BOLD}Available Desktop Environments:${NC}"
-    # Sort the keys numerically before printing
-    for key in $(echo "${!DE_OPTIONS[@]}" | tr ' ' '\n' | sort -n); do
-        echo -e "${BLUE}$key${NC}) ${DE_OPTIONS[$key]}"
-    done
-    echo
-    
-    local selected_de=""
-    while [ -z "$selected_de" ]; do
-        read -p "$(echo -e ${BOLD}${BLUE}$ARROW${NC} Select desktop environment [1-4]: )" de_choice
-        if [[ -n "${DE_OPTIONS[$de_choice]}" ]]; then
-            selected_de="${DE_OPTIONS[$de_choice]}"
-            success "Selected $selected_de"
-        else
-            warn "Invalid selection. Please try again."
-        fi
-    done
-    
-    # Export selection and save to config
-    export DESKTOP_ENV="$selected_de"
-    echo "DESKTOP_ENV=$selected_de" > "$CONFIG_DIR/de_config"
-}
-
-# Enhanced cleanup (building on your existing one)
 cleanup() {
     print_section "🧹 Cleaning Up"
     
@@ -368,36 +309,22 @@ cleanup() {
         success "Cleaned $file"
     done
     
-    # Clean package cache based on DE
-    case "$DESKTOP_ENV" in
-        "BSPWM"|"DWM")
-            progress "Cleaning AUR cache"
-            yay -Sc --noconfirm &>/dev/null
-            success "Cleaned AUR cache"
-            ;;
-    esac
+    if [[ "$DESKTOP_ENV" =~ ^(BSPWM|DWM)$ ]]; then
+        progress "Cleaning AUR cache"
+        yay -Sc --noconfirm &>/dev/null
+        success "Cleaned AUR cache"
+    fi
 }
 
-# Enhanced installation verification (building on your existing one)
 verify_installation() {
     print_section "✅ Verifying Installation"
     
     local required_dirs=(
-        "$DOTFILES_DIR"
         "$CONFIG_DIR"
-        "$SCRIPTS_DIR"
-        "$SSH_DIR"
-    )
-    
-    local required_configs=(
-        "fish"
-        "nvim"
-        "starship.toml"
     )
     
     local failed=0
     
-    # Check directories
     for dir in "${required_dirs[@]}"; do
         progress "Checking $dir"
         if [ -d "$dir" ]; then
@@ -408,18 +335,6 @@ verify_installation() {
         fi
     done
     
-    # Check configs
-    for config in "${required_configs[@]}"; do
-        progress "Checking $config configuration"
-        if [ -e "$CONFIG_DIR/$config" ]; then
-            success "Found $config configuration"
-        else
-            warn "Missing $config configuration"
-            failed=1
-        fi
-    done
-    
-    # Check DE-specific components
     case "$DESKTOP_ENV" in
         "BSPWM")
             progress "Checking BSPWM configuration"
@@ -448,7 +363,6 @@ verify_installation() {
     fi
 }
 
-# Enhanced completion message (building on your existing one)
 print_completion_message() {
     echo
     print_centered "${GREEN}${BOLD}Installation Complete!${NC}"
@@ -477,98 +391,93 @@ print_completion_message() {
     
     echo
     echo -e "${YELLOW}Note:${NC} If you encounter any issues:"
-    echo "- Check the logs in /tmp/installer_log"
+    echo "- Check the logs in /root/installer_*.log"
     echo "- Verify your configurations in ~/.config"
     echo "- Run 'verify_installation' to check components"
     echo
 }
 
-setup_logging() {
-    LOG_FILE="/tmp/installer_$(date +%Y%m%d_%H%M%S).log"
-    # Create log file and set permissions
-    touch "$LOG_FILE"
-    chmod 644 "$LOG_FILE"
-    # Redirect stdout and stderr to both console and log file
-    exec 1> >(tee -a "$LOG_FILE")
-    exec 2> >(tee -a "$LOG_FILE" >&2)
-    echo "Installation log started at $(date)"
-}
-
-# Main installation function
 main() {
-    setup_logging
-    print_header
-    check_script_permissions
-    check_prerequisites
-    check_network
+   setup_logging
+   print_header
+   check_script_permissions
+   check_prerequisites
+   check_network
 
-    # Detect OS
-    if [ -f /etc/os-release ]; then
-        . /etc/os-release
-        case "$ID" in
-            "arch")
-                if [ -f /etc/archiso-release ]; then
-                    # We're in the installation environment
-                    progress "Starting Arch Linux installation"
-                    
-                    # Gather all user input first
-                    gather_user_input
-                    
-                    # Handle SSH keys first if requested
-                    if [[ "$COPY_SSH" =~ ^(y|yes)$ ]]; then
-                        mount_usb_and_copy_ssh && verify_ssh
-                    fi
-                    
-                    # Continue with installation
-                    if [ -f "$SCRIPT_DIR/preinstall/arch/btrfs.sh" ]; then
-                        bash "$SCRIPT_DIR/preinstall/arch/btrfs.sh" || error "BTRFS setup failed"
-                        success "BTRFS setup completed"
-                        
-                        if [ -f "$SCRIPT_DIR/preinstall/arch/archinstall.sh" ]; then
-                            bash "$SCRIPT_DIR/preinstall/arch/archinstall.sh" || error "Arch installation failed"
-                            success "Arch installation completed"
-                            
-                            # Prompt for reboot
-                            echo
-                            read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Installation complete. Reboot now? [Y/n]: ")" reboot_choice
-                            case "${reboot_choice,,}" in
-                                ""|y|yes)
-                                    systemctl reboot
-                                    ;;
-                                *)
-                                    echo "Please reboot manually when ready."
-                                    exit 0
-                                    ;;
-                            esac
-                        else
-                            error "archinstall.sh not found"
-                        fi
-                    else
-                        error "btrfs.sh not found"
-                    fi
-                else
-                    # Post-installation setup
-                    select_desktop_environment
-                    source "$SCRIPT_DIR/os/arch.sh"
-                fi
-                ;;
-            # ... rest of the OS cases ...
-        esac
-    else
-        error "Unable to detect distribution"
-    fi
-    
-    # Only run these for post-installation
-    if [ ! -f /etc/archiso-release ]; then
-        verify_installation
-        cleanup
-        print_completion_message
-    fi
+   if [ -f /etc/os-release ]; then
+       . /etc/os-release
+       case "$ID" in
+           "arch")
+               if [ -f /etc/archiso-release ]; then
+                   progress "Starting Arch Linux installation"
+                   gather_user_input
+                   
+                   if [[ "$COPY_SSH" =~ ^(y|yes)$ ]]; then
+                       mount_usb_and_copy_ssh && verify_ssh
+                   fi
+                   
+                   if [ -f "$SCRIPT_DIR/preinstall/arch/btrfs.sh" ]; then
+                       bash "$SCRIPT_DIR/preinstall/arch/btrfs.sh" || error "BTRFS setup failed"
+                       success "BTRFS setup completed"
+                       
+                       if [ -f "$SCRIPT_DIR/preinstall/arch/archinstall.sh" ]; then
+                           bash "$SCRIPT_DIR/preinstall/arch/archinstall.sh" || error "Arch installation failed"
+                           success "Arch installation completed"
+                           
+                           echo
+                           read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Installation complete. Reboot now? [Y/n]: ")" reboot_choice
+                           case "${reboot_choice,,}" in
+                               ""|y|yes)
+                                   systemctl reboot
+                                   ;;
+                               *)
+                                   echo "Please reboot manually when ready."
+                                   exit 0
+                                   ;;
+                           esac
+                       else
+                           error "archinstall.sh not found"
+                       fi
+                   else
+                       error "btrfs.sh not found"
+                   fi
+               else
+                   # Post-installation setup
+                   select_desktop_environment
+                   source "$SCRIPT_DIR/os/arch.sh"
+               fi
+               ;;
+           "debian"|"ubuntu")
+               select_desktop_environment
+               source "$SCRIPT_DIR/os/debian.sh"
+               ;;
+           "fedora")
+               select_desktop_environment
+               source "$SCRIPT_DIR/os/fedora.sh"
+               ;;
+           "void")
+               select_desktop_environment
+               source "$SCRIPT_DIR/os/void.sh"
+               ;;
+           *)
+               error "Unsupported distribution: $ID"
+               ;;
+       esac
+   else
+       error "Unable to detect distribution"
+   fi
+   
+   # Only run these for post-installation
+   if [ ! -f /etc/archiso-release ]; then
+       verify_installation
+       cleanup
+       print_completion_message
+   fi
 }
 
 # Run the installer with error handling
 if [ "${BASH_SOURCE[0]}" -ef "$0" ]; then
-    set -E  # Inherit ERR trap by shell functions
-    trap 'echo "Error on line $LINENO. Check log at $LOG_FILE"; exit 1' ERR
-    main "$@"
+   set -E  # Inherit ERR trap by shell functions
+   trap 'echo "Error on line $LINENO. Check log at $LOG_FILE"; exit 1' ERR
+   main "$@"
 fi
