@@ -488,64 +488,74 @@ print_completion_message() {
 # Main installation function
 main() {
     print_header
-    
-    # Initial checks
-    check_prerequisites
-    check_network
-    
-    # Gather all user input first
-    gather_user_input
-    
-    # If SSH copy was requested, do it now
-    if [[ "$COPY_SSH" =~ ^(y|yes)$ ]]; then
-        mount_usb_and_copy_ssh
-    fi
-    
-    # Run BTRFS setup (which will also ask for disk configuration)
-    if [ -f "$SCRIPT_DIR/preinstall/arch/btrfs.sh" ]; then
-        bash "$SCRIPT_DIR/preinstall/arch/btrfs.sh" || error "BTRFS setup failed"
-        success "BTRFS setup completed"
-        
-        # Run Arch installation using saved configuration
-        if [ -f "$SCRIPT_DIR/preinstall/arch/archinstall.sh" ]; then
-            bash "$SCRIPT_DIR/preinstall/arch/archinstall.sh" || error "Arch installation failed"
-            success "Arch installation completed"
-        else
-            error "archinstall.sh not found"
-        fi
-    else
-        error "btrfs.sh not found"
-    fi
-}
-    
-    # Initial checks
     check_script_permissions
     check_prerequisites
     check_network
-    check_usb
 
-        read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Do you want to copy SSH keys from USB? [Y/n]: ")" copy_ssh
-    if [[ "${copy_ssh,,}" =~ ^(y|yes|)$ ]]; then
-        mount_usb_and_copy_ssh
-    fi
-    
-    # Select desktop environment
-    select_desktop_environment
-    
-    # Source OS-specific script
+    # Detect OS
     if [ -f /etc/os-release ]; then
         . /etc/os-release
         case "$ID" in
             "arch")
-                source "$SCRIPT_DIR/os/arch.sh"
+                if [ -f /etc/archiso-release ]; then
+                    # We're in the installation environment
+                    progress "Starting Arch Linux installation"
+                    
+                    # Gather all user input first
+                    gather_user_input
+                    
+                    # If SSH copy was requested, do it now
+                    if [[ "$COPY_SSH" =~ ^(y|yes)$ ]]; then
+                        mount_usb_and_copy_ssh
+                    fi
+                    
+                    # Run installation scripts
+                    if [ -f "$SCRIPT_DIR/preinstall/arch/btrfs.sh" ]; then
+                        bash "$SCRIPT_DIR/preinstall/arch/btrfs.sh" || error "BTRFS setup failed"
+                        success "BTRFS setup completed"
+                        
+                        if [ -f "$SCRIPT_DIR/preinstall/arch/archinstall.sh" ]; then
+                            bash "$SCRIPT_DIR/preinstall/arch/archinstall.sh" || error "Arch installation failed"
+                            success "Arch installation completed"
+                            
+                            # Prompt for reboot
+                            echo
+                            read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Installation complete. Reboot now? [Y/n]: ")" reboot_choice
+                            case "${reboot_choice,,}" in
+                                ""|y|yes)
+                                    systemctl reboot
+                                    ;;
+                                *)
+                                    echo "Please reboot manually when ready."
+                                    exit 0
+                                    ;;
+                            esac
+                        else
+                            error "archinstall.sh not found"
+                        fi
+                    else
+                        error "btrfs.sh not found"
+                    fi
+                else
+                    # Post-installation setup
+                    check_usb
+                    select_desktop_environment
+                    source "$SCRIPT_DIR/os/arch.sh"
+                fi
                 ;;
             "debian"|"ubuntu")
+                check_usb
+                select_desktop_environment
                 source "$SCRIPT_DIR/os/debian.sh"
                 ;;
             "fedora")
+                check_usb
+                select_desktop_environment
                 source "$SCRIPT_DIR/os/fedora.sh"
                 ;;
             "void")
+                check_usb
+                select_desktop_environment
                 source "$SCRIPT_DIR/os/void.sh"
                 ;;
             *)
@@ -556,10 +566,12 @@ main() {
         error "Unable to detect distribution"
     fi
     
-    # Final steps
-    verify_installation
-    cleanup
-    print_completion_message
+    # Only run these for post-installation
+    if [ ! -f /etc/archiso-release ]; then
+        verify_installation
+        cleanup
+        print_completion_message
+    fi
 }
 
 # Run the installer with error handling
