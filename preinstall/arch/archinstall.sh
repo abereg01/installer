@@ -109,7 +109,7 @@ create_config() {
     cat > /root/archinstall.json << EOF
 {
     "additional-repositories": ["multilib"],
-    "audio": "pulseaudio",
+    "audio": "pipewire",
     "bootloader": "grub",
     "config_version": "2.5.1",
     "debug": false,
