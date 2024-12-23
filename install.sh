@@ -154,7 +154,7 @@ check_prerequisites() {
     success "All prerequisites met"
 }
 
-# Enhanced network check (building on your existing one)
+# Enhanced network check
 check_network() {
     print_section "🌐 Checking Network Connection"
     
@@ -164,10 +164,11 @@ check_network() {
     fi
     success "Network connection verified"
     
-    # Additional SSH connectivity test
+    # Make SSH check optional
     progress "Testing SSH connectivity"
     if ! ssh -T git@github.com 2>&1 | grep -q "successfully authenticated"; then
         warn "SSH connection to GitHub failed. Some features may be limited."
+        warn "You can continue without SSH setup."
     else
         success "SSH connection verified"
     fi
