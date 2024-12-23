@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-# Main system installer script
-# Handles UI, checks, and desktop environment selection
+# Script version
+VERSION="1.0.0"
 
-# Colors and styling
+# Colors and styling (keeping your existing scheme)
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
@@ -15,7 +15,7 @@ DIM='\033[2m'
 ITALIC='\033[3m'
 NC='\033[0m'
 
-# Unicode symbols
+# Unicode symbols (keeping your existing ones)
 CHECK_MARK="\033[0;32m✓\033[0m"
 CROSS_MARK="\033[0;31m✗\033[0m"
 ARROW="→"
@@ -24,10 +24,11 @@ KEY="🔑"
 FOLDER="📁"
 DOWNLOAD="📥"
 
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get terminal width
+TERM_WIDTH=$(tput cols)
 
-# Directories
+# Script directories (keeping your existing structure)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOME_DIR="$HOME"
 CONFIG_DIR="$HOME_DIR/.config"
 DOTFILES_DIR="$HOME_DIR/dotfiles"
@@ -36,17 +37,17 @@ IMAGES_DIR="$HOME_DIR/lib/images"
 THEMES_DIR="$HOME_DIR/.themes"
 SSH_DIR="$HOME_DIR/.ssh"
 
-# Repository URLs
+# Repository URLs (keeping your existing ones)
 DOTFILES_REPO="git@github.com:abereg01/dotfiles.git"
 WALLPAPERS_REPO="git@github.com:abereg01/wallpapers.git"
 SCRIPTS_REPO="git@github.com:abereg01/scripts.git"
 THEMES_REPO="git@github.com:abereg01/themes.git"
 
-# Set USB path and SSH backup location
+# USB and backup paths (keeping your existing ones)
 USB_PATH="/run/media/andreas/YUMI"
 SSH_BACKUP="$USB_PATH/secure/.ssh"
 
-# Desktop Environment Options
+# Desktop Environment Options (keeping your existing ones)
 declare -A DE_OPTIONS=(
     ["1"]="BSPWM"
     ["2"]="KDE"
@@ -54,33 +55,41 @@ declare -A DE_OPTIONS=(
     ["4"]="Hyprland"
 )
 
-# Function to print centered text
+# Required tools for the script
+REQUIRED_TOOLS=(
+    "git"
+    "curl"
+    "sudo"
+    "rsync"
+)
+
+# Function to print centered text (keeping your existing one)
 print_centered() {
     local text="$1"
     local width=$((($TERM_WIDTH - ${#text}) / 2))
     printf "%${width}s%s%${width}s\n" "" "$text" ""
 }
 
-# Function to print header
+# Function to print header (enhanced version of yours)
 print_header() {
     clear
-    echo
     echo -e "${BOLD}${BLUE}"
     print_centered "╔════════════════════════════════════════╗"
     print_centered "║     System Configuration Installer     ║"
+    print_centered "║              v${VERSION}                   ║"
     print_centered "╚════════════════════════════════════════╝"
     echo -e "${NC}"
     echo
 }
 
-# Function to print section header
+# Function to print section header (keeping your existing one)
 print_section() {
     echo
     echo -e "${CYAN}${BOLD}$1${NC}"
     echo -e "${DIM}$(printf '%.s─' $(seq 1 $TERM_WIDTH))${NC}"
 }
 
-# Progress and status functions
+# Enhanced progress and status functions (building on your existing ones)
 progress() {
     echo -ne "${ITALIC}${DIM}$1...${NC}"
 }
@@ -91,48 +100,57 @@ success() {
 
 error() {
     echo -e "\r${CROSS_MARK} ${RED}ERROR:${NC} $1"
-    exit 1
+    if [ "$2" != "no_exit" ]; then
+        exit 1
+    fi
 }
 
 warn() {
     echo -e "\r${YELLOW}⚠ WARNING:${NC} $1"
 }
 
-# Check prerequisites
+# Enhanced prerequisites check (building on your existing one)
 check_prerequisites() {
     print_section "🔍 Checking Prerequisites"
     
-    local REQUIRED_COMMANDS=(git curl sudo)
-    local MISSING_COMMANDS=()
-
-    for cmd in "${REQUIRED_COMMANDS[@]}"; do
-        progress "Checking for $cmd"
-        if ! command -v "$cmd" &> /dev/null; then
-            MISSING_COMMANDS+=("$cmd")
+    local missing_tools=()
+    
+    for tool in "${REQUIRED_TOOLS[@]}"; do
+        progress "Checking for $tool"
+        if ! command -v "$tool" &> /dev/null; then
+            missing_tools+=("$tool")
+            error "$tool not found" "no_exit"
         else
-            success "Found $cmd"
+            success "Found $tool"
         fi
     done
-
-    if [ ${#MISSING_COMMANDS[@]} -ne 0 ]; then
-        error "Missing required commands: ${MISSING_COMMANDS[*]}"
+    
+    if [ ${#missing_tools[@]} -ne 0 ]; then
+        error "Missing required tools: ${missing_tools[*]}"
     fi
     success "All prerequisites met"
 }
 
-# Check network connection
+# Enhanced network check (building on your existing one)
 check_network() {
     print_section "🌐 Checking Network Connection"
     
     progress "Testing internet connectivity"
-    if ping -c 1 github.com &> /dev/null; then
-        success "Network connection verified"
-    else
+    if ! ping -c 1 github.com &> /dev/null; then
         error "No internet connection available"
+    fi
+    success "Network connection verified"
+    
+    # Additional SSH connectivity test
+    progress "Testing SSH connectivity"
+    if ! ssh -T git@github.com 2>&1 | grep -q "successfully authenticated"; then
+        warn "SSH connection to GitHub failed. Some features may be limited."
+    else
+        success "SSH connection verified"
     fi
 }
 
-# Check for USB drive and SSH keys
+# Enhanced USB check (building on your existing one)
 check_usb() {
     print_section "🔑 Checking USB Drive"
     
@@ -141,15 +159,22 @@ check_usb() {
         error "USB drive not found at $USB_PATH"
     fi
     success "Found USB drive"
-
+    
     progress "Checking SSH keys"
     if [ ! -d "$SSH_BACKUP" ]; then
         error "SSH directory not found at $SSH_BACKUP"
     fi
     success "Found SSH keys"
+    
+    # Additional permission checks
+    progress "Checking USB permissions"
+    if [ ! -r "$USB_PATH" ] || [ ! -w "$USB_PATH" ]; then
+        error "Insufficient permissions on USB drive"
+    fi
+    success "USB permissions verified"
 }
 
-# Select desktop environment
+# Enhanced DE selection (building on your existing one)
 select_desktop_environment() {
     print_section "🖥️  Desktop Environment Selection"
     
@@ -158,83 +183,161 @@ select_desktop_environment() {
         echo -e "${BLUE}$key${NC}) ${DE_OPTIONS[$key]}"
     done
     echo
-
-    while true; do
+    
+    local selected_de=""
+    while [ -z "$selected_de" ]; do
         read -p "$(echo -e ${BOLD}${BLUE}$ARROW${NC} Select desktop environment [1-4]: )" de_choice
         if [[ -n "${DE_OPTIONS[$de_choice]}" ]]; then
             selected_de="${DE_OPTIONS[$de_choice]}"
             success "Selected $selected_de"
-            break
         else
             warn "Invalid selection. Please try again."
         fi
     done
-
-    # Export selection for OS-specific script
+    
+    # Export selection and save to config
     export DESKTOP_ENV="$selected_de"
+    echo "DESKTOP_ENV=$selected_de" > "$CONFIG_DIR/de_config"
 }
 
-# Cleanup function
+# Enhanced cleanup (building on your existing one)
 cleanup() {
     print_section "🧹 Cleaning Up"
     
-    progress "Removing temporary files"
-    rm -rf /tmp/installer_* 2>/dev/null
-    success "Cleanup complete"
+    local temp_files=(
+        "/tmp/installer_*"
+        "/tmp/config_backup_*"
+        "/tmp/de_setup_*"
+    )
+    
+    for file in "${temp_files[@]}"; do
+        progress "Removing $file"
+        rm -rf $file 2>/dev/null
+        success "Cleaned $file"
+    done
+    
+    # Clean package cache based on DE
+    case "$DESKTOP_ENV" in
+        "BSPWM"|"DWM")
+            progress "Cleaning AUR cache"
+            yay -Sc --noconfirm &>/dev/null
+            success "Cleaned AUR cache"
+            ;;
+    esac
 }
 
-# Verify installation
+# Enhanced installation verification (building on your existing one)
 verify_installation() {
     print_section "✅ Verifying Installation"
     
-    local REQUIRED_DIRS=("$DOTFILES_DIR" "$CONFIG_DIR" "$SCRIPTS_DIR")
-    local FAILED=0
+    local required_dirs=(
+        "$DOTFILES_DIR"
+        "$CONFIG_DIR"
+        "$SCRIPTS_DIR"
+        "$SSH_DIR"
+    )
     
-    for dir in "${REQUIRED_DIRS[@]}"; do
+    local required_configs=(
+        "fish"
+        "nvim"
+        "starship.toml"
+    )
+    
+    local failed=0
+    
+    # Check directories
+    for dir in "${required_dirs[@]}"; do
         progress "Checking $dir"
         if [ -d "$dir" ]; then
             success "Found $dir"
         else
             warn "Missing $dir"
-            FAILED=1
+            failed=1
         fi
     done
     
-    if [ $FAILED -eq 1 ]; then
-        warn "Some components may need attention"
+    # Check configs
+    for config in "${required_configs[@]}"; do
+        progress "Checking $config configuration"
+        if [ -e "$CONFIG_DIR/$config" ]; then
+            success "Found $config configuration"
+        else
+            warn "Missing $config configuration"
+            failed=1
+        fi
+    done
+    
+    # Check DE-specific components
+    case "$DESKTOP_ENV" in
+        "BSPWM")
+            progress "Checking BSPWM configuration"
+            if [ -f "$CONFIG_DIR/bspwm/bspwmrc" ] && [ -f "$CONFIG_DIR/sxhkd/sxhkdrc" ]; then
+                success "BSPWM configuration verified"
+            else
+                warn "BSPWM configuration incomplete"
+                failed=1
+            fi
+            ;;
+        "KDE")
+            progress "Checking KDE configuration"
+            if [ -d "$CONFIG_DIR/plasma-workspace" ]; then
+                success "KDE configuration verified"
+            else
+                warn "KDE configuration incomplete"
+                failed=1
+            fi
+            ;;
+    esac
+    
+    if [ $failed -eq 1 ]; then
+        warn "Some components need attention"
     else
         success "All components verified"
     fi
 }
 
-# Print completion message
+# Enhanced completion message (building on your existing one)
 print_completion_message() {
     echo
     print_centered "${GREEN}${BOLD}Installation Complete!${NC}"
     echo
     echo -e "${CYAN}Next steps:${NC}"
     echo "1. Log out and back in"
+    
     case "$DESKTOP_ENV" in
         "BSPWM")
             echo "2. Start BSPWM: exec bspwm"
+            echo "3. Check ~/.config/bspwm for your configurations"
             ;;
         "KDE")
-            echo "2. Select KDE from your display manager"
+            echo "2. Select KDE Plasma from your display manager"
+            echo "3. Check System Settings for your configurations"
             ;;
         "DWM")
             echo "2. Start DWM: exec dwm"
+            echo "3. Check ~/.dwm for your configurations"
             ;;
         "Hyprland")
             echo "2. Start Hyprland: exec Hyprland"
+            echo "3. Check ~/.config/hypr for your configurations"
             ;;
     esac
-    echo "3. Check ~/.config for your configurations"
+    
     echo
-    echo -e "${YELLOW}Note:${NC} If you encounter any issues, check the logs in /tmp/installer_log"
+    echo -e "${YELLOW}Note:${NC} If you encounter any issues:"
+    echo "- Check the logs in /tmp/installer_log"
+    echo "- Verify your configurations in ~/.config"
+    echo "- Run 'verify_installation' to check components"
+    echo
 }
 
-# Main installation function
+# Main installation function (enhanced version of yours)
 main() {
+    # Start logging
+    exec 3>&1 4>&2
+    trap 'exec 2>&4 1>&3' 0 1 2 3
+    exec 1>/tmp/installer_log 2>&1
+    
     print_header
     
     # Initial checks
@@ -245,7 +348,7 @@ main() {
     # Select desktop environment
     select_desktop_environment
     
-    # Detect OS and source appropriate script
+    # Source OS-specific script
     if [ -f /etc/os-release ]; then
         . /etc/os-release
         case "$ID" in
@@ -275,5 +378,8 @@ main() {
     print_completion_message
 }
 
-# Run the installer
-main
+# Run the installer with error handling
+if [ "${BASH_SOURCE[0]}" -ef "$0" ]; then
+    trap 'error "An error occurred. Check /tmp/installer_log for details."' ERR
+    main "$@"
+fi
