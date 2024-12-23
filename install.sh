@@ -483,10 +483,20 @@ print_completion_message() {
     echo
 }
 
-
+setup_logging() {
+    LOG_FILE="/tmp/installer_$(date +%Y%m%d_%H%M%S).log"
+    # Create log file and set permissions
+    touch "$LOG_FILE"
+    chmod 644 "$LOG_FILE"
+    # Redirect stdout and stderr to both console and log file
+    exec 1> >(tee -a "$LOG_FILE")
+    exec 2> >(tee -a "$LOG_FILE" >&2)
+    echo "Installation log started at $(date)"
+}
 
 # Main installation function
 main() {
+    setup_logging
     print_header
     check_script_permissions
     check_prerequisites
