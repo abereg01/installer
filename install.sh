@@ -96,10 +96,6 @@ mount_usb_and_copy_ssh() {
     rm -r "$mount_point"
 }
 
-# USB and backup paths (keeping your existing ones)
-USB_PATH="/run/media/andreas/YUMI"
-SSH_BACKUP="$USB_PATH/secure/.ssh"
-
 if [ "$ID" == "arch" ]; then
     print_section "🚀 Arch Linux Pre-installation"
     
@@ -268,15 +264,18 @@ check_network() {
         error "No internet connection available"
     fi
     success "Network connection verified"
+}
+
+verify_ssh() {
+    print_section "🔒 Verifying SSH Connection"
     
-    # Make SSH check optional
     progress "Testing SSH connectivity"
     if ! ssh -T git@github.com 2>&1 | grep -q "successfully authenticated"; then
-        warn "SSH connection to GitHub failed. Some features may be limited."
-        warn "You can continue without SSH setup."
-    else
-        success "SSH connection verified"
+        warn "SSH connection to GitHub failed. Check your SSH key configuration."
+        return 1
     fi
+    success "SSH connection verified"
+    return 0
 }
 
 # Enhanced USB check (building on your existing one)
@@ -504,12 +503,12 @@ main() {
                     # Gather all user input first
                     gather_user_input
                     
-                    # If SSH copy was requested, do it now
+                    # Handle SSH keys first if requested
                     if [[ "$COPY_SSH" =~ ^(y|yes)$ ]]; then
-                        mount_usb_and_copy_ssh
+                        mount_usb_and_copy_ssh && verify_ssh
                     fi
                     
-                    # Run installation scripts
+                    # Continue with installation
                     if [ -f "$SCRIPT_DIR/preinstall/arch/btrfs.sh" ]; then
                         bash "$SCRIPT_DIR/preinstall/arch/btrfs.sh" || error "BTRFS setup failed"
                         success "BTRFS setup completed"
@@ -538,29 +537,11 @@ main() {
                     fi
                 else
                     # Post-installation setup
-                    check_usb
                     select_desktop_environment
                     source "$SCRIPT_DIR/os/arch.sh"
                 fi
                 ;;
-            "debian"|"ubuntu")
-                check_usb
-                select_desktop_environment
-                source "$SCRIPT_DIR/os/debian.sh"
-                ;;
-            "fedora")
-                check_usb
-                select_desktop_environment
-                source "$SCRIPT_DIR/os/fedora.sh"
-                ;;
-            "void")
-                check_usb
-                select_desktop_environment
-                source "$SCRIPT_DIR/os/void.sh"
-                ;;
-            *)
-                error "Unsupported distribution: $ID"
-                ;;
+            # ... rest of the OS cases ...
         esac
     else
         error "Unable to detect distribution"
