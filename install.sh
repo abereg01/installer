@@ -43,6 +43,59 @@ WALLPAPERS_REPO="git@github.com:abereg01/wallpapers.git"
 SCRIPTS_REPO="git@github.com:abereg01/scripts.git"
 THEMES_REPO="git@github.com:abereg01/themes.git"
 
+mount_usb_and_copy_ssh() {
+    print_section "🔑 Setting up SSH Keys"
+    
+    # Find USB drive
+    progress "Detecting installation USB"
+    local usb_device=""
+    while read -r device; do
+        if mount | grep -q "^$device"; then
+            # Skip if already mounted
+            continue
+        fi
+        if file -s "$device" | grep -qi "fat\|iso9660"; then
+            usb_device="$device"
+            break
+        fi
+    done < <(lsblk -pnl -o NAME | grep -E 'sd[a-z][0-9]|nvme[0-9]n[0-9]p[0-9]')
+
+    if [ -z "$usb_device" ]; then
+        error "Could not find USB device" "no_exit"
+        return 1
+    fi
+    success "Found USB device: $usb_device"
+
+    # Create mount point
+    local mount_point="/mnt/usb"
+    mkdir -p "$mount_point"
+
+    # Mount USB
+    progress "Mounting USB"
+    if ! mount "$usb_device" "$mount_point"; then
+        error "Failed to mount USB" "no_exit"
+        return 1
+    fi
+    success "Mounted USB"
+
+    # Copy SSH keys
+    progress "Copying SSH keys"
+    if [ -d "$mount_point/secure/.ssh" ]; then
+        mkdir -p /root/.ssh
+        cp -r "$mount_point/secure/.ssh/"* /root/.ssh/
+        chmod 700 /root/.ssh
+        chmod 600 /root/.ssh/*
+        success "SSH keys copied"
+    else
+        error "SSH directory not found on USB" "no_exit"
+        return 1
+    fi
+
+    # Unmount USB
+    umount "$mount_point"
+    rm -r "$mount_point"
+}
+
 # USB and backup paths (keeping your existing ones)
 USB_PATH="/run/media/andreas/YUMI"
 SSH_BACKUP="$USB_PATH/secure/.ssh"
@@ -378,14 +431,21 @@ print_completion_message() {
     echo
 }
 
-# Main installation function (enhanced version of yours)
+
+
+# Main installation function
 main() {
-    # Start logging
-    exec 3>&1 4>&2
-    trap 'exec 2>&4 1>&3' 0 1 2 3
-    exec 1>/tmp/installer_log 2>&1
-    
     print_header
+    
+    # Initial checks
+    check_prerequisites
+    check_network
+    
+    # Ask about SSH keys
+    read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Do you want to copy SSH keys from USB? [Y/n]: ")" copy_ssh
+    if [[ "${copy_ssh,,}" =~ ^(y|yes|)$ ]]; then
+        mount_usb_and_copy_ssh
+    fi
     
     # Initial checks
     check_script_permissions
