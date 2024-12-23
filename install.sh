@@ -452,6 +452,11 @@ main() {
     check_prerequisites
     check_network
     check_usb
+
+        read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Do you want to copy SSH keys from USB? [Y/n]: ")" copy_ssh
+    if [[ "${copy_ssh,,}" =~ ^(y|yes|)$ ]]; then
+        mount_usb_and_copy_ssh
+    fi
     
     # Select desktop environment
     select_desktop_environment
