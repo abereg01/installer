@@ -123,6 +123,58 @@ if [ "$ID" == "arch" ]; then
     fi
 fi
 
+gather_user_input() {
+    print_section "📝 Installation Configuration"
+
+    # SSH Keys
+    read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Do you want to copy SSH keys from USB? [Y/n]: ")" copy_ssh
+    export COPY_SSH="${copy_ssh,,}"
+
+    # Hostname
+    read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter hostname: ")" hostname
+    export HOSTNAME=${hostname:-arch}
+
+    # Root password
+    while true; do
+        read -s -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter root password: ")" root_password
+        echo
+        read -s -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Confirm root password: ")" root_password2
+        echo
+        if [ "$root_password" = "$root_password2" ]; then
+            export ROOT_PASSWORD="$root_password"
+            break
+        fi
+        warn "Passwords don't match. Please try again."
+    done
+
+    # User account
+    read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter username: ")" username
+    export USERNAME="$username"
+    
+    while true; do
+        read -s -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Enter password for $username: ")" user_password
+        echo
+        read -s -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Confirm password: ")" user_password2
+        echo
+        if [ "$user_password" = "$user_password2" ]; then
+            export USER_PASSWORD="$user_password"
+            break
+        fi
+        warn "Passwords don't match. Please try again."
+    done
+
+    # Save configuration
+    cat > /root/install_config << EOF
+COPY_SSH="$COPY_SSH"
+HOSTNAME="$HOSTNAME"
+USERNAME="$USERNAME"
+ROOT_PASSWORD="$ROOT_PASSWORD"
+USER_PASSWORD="$USER_PASSWORD"
+EOF
+
+    success "Configuration saved"
+}
+
 # Desktop Environment Options (keeping your existing ones)
 declare -A DE_OPTIONS=(
     ["1"]="BSPWM"
