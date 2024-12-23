@@ -47,6 +47,29 @@ THEMES_REPO="git@github.com:abereg01/themes.git"
 USB_PATH="/run/media/andreas/YUMI"
 SSH_BACKUP="$USB_PATH/secure/.ssh"
 
+if [ "$ID" == "arch" ]; then
+    print_section "🚀 Arch Linux Pre-installation"
+    
+    # Check if we're in the installation environment
+    if [ -f /etc/archiso-release ]; then
+        progress "Running BTRFS setup"
+        if [ -f "$SCRIPT_DIR/preinstall/arch/btrfs.sh" ]; then
+            bash "$SCRIPT_DIR/preinstall/arch/btrfs.sh" || error "BTRFS setup failed"
+            success "BTRFS setup completed"
+            
+            progress "Running Arch installation"
+            if [ -f "$SCRIPT_DIR/preinstall/arch/archinstall.sh" ]; then
+                bash "$SCRIPT_DIR/preinstall/arch/archinstall.sh" || error "Arch installation failed"
+                success "Arch installation completed"
+            else
+                error "archinstall.sh not found"
+            fi
+        else
+            error "btrfs.sh not found"
+        fi
+    fi
+}
+
 # Desktop Environment Options (keeping your existing ones)
 declare -A DE_OPTIONS=(
     ["1"]="BSPWM"
