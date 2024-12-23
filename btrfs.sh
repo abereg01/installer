@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Script version
-VERSION="1.0.0"
+VERSION="0.2"
 
 # Colors and styling
 RED='\033[0;31m'
