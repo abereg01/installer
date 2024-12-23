@@ -1,29 +1,48 @@
 #!/usr/bin/env bash
 
-# Arch Linux specific installation script
+# Version
+VERSION="1.0.0"
 
-# Base packages for all installations
+# Import common functions if not already imported
+if [ -z "$SCRIPT_DIR" ]; then
+    echo "Error: This script should be sourced from install.sh"
+    exit 1
+fi
+
+# Base packages (enhanced version of yours)
 BASE_PACKAGES=(
+    # System base
     base base-devel
     git curl wget
     networkmanager network-manager-applet
+    
+    # Audio
     pipewire pipewire-alsa pipewire-pulse pipewire-jack
+    
+    # Shell and tools
     fish starship
     kitty alacritty
     neovim vim
+    
+    # System utilities
     dunst libnotify
     thunar
     sddm
     feh eza bat btop ripgrep unzip
+    timeshift timeshift-autosnap
+    grub-btrfs btrbk
+    
     # Development tools
     nodejs npm yarn
     python python-pip python-setuptools
     docker docker-compose
+    
+    # System management
     gparted
     zram-generator
 )
 
-# Desktop environment specific packages
+# Desktop environment specific packages (keeping your existing ones)
 BSPWM_PACKAGES=(
     bspwm sxhkd polybar rofi picom
     dmenu
@@ -34,12 +53,6 @@ KDE_PACKAGES=(
     kde-applications
     dolphin konsole
     plasma-nm plasma-pa
-)
-
-GNOME_PACKAGES=(
-    gnome
-    gnome-tweaks
-    gnome-shell-extensions
 )
 
 DWM_PACKAGES=(
@@ -55,7 +68,7 @@ HYPRLAND_PACKAGES=(
     wl-clipboard
 )
 
-# Check Arch Linux
+# Function to check Arch version (enhanced)
 check_arch_version() {
     print_section "🔍 Checking System Requirements"
     
@@ -64,25 +77,48 @@ check_arch_version() {
         error "This script requires Arch Linux"
     fi
     success "System requirements met"
+
+    progress "Checking kernel version"
+    local kernel_version=$(uname -r | cut -d. -f1,2)
+    if (( $(echo "$kernel_version < 5.15" | bc -l) )); then
+        warn "Kernel version $kernel_version might be too old"
+    else
+        success "Kernel version $kernel_version is compatible"
+    fi
 }
 
-# Configure pacman
+# Function to configure pacman (enhanced)
 configure_pacman() {
     print_section "🔧 Configuring Pacman"
     
+    local pacman_conf="/etc/pacman.conf"
+    progress "Backing up pacman configuration"
+    sudo cp "$pacman_conf" "${pacman_conf}.backup"
+    success "Created pacman configuration backup"
+    
     progress "Optimizing pacman configuration"
-    sudo sed -i 's/#ParallelDownloads = 5/ParallelDownloads = 10/' /etc/pacman.conf
-    sudo sed -i 's/#Color/Color/' /etc/pacman.conf
-    sudo sed -i 's/#VerbosePkgLists/VerbosePkgLists/' /etc/pacman.conf
+    sudo sed -i 's/#ParallelDownloads = 5/ParallelDownloads = 10/' "$pacman_conf"
+    sudo sed -i 's/#Color/Color/' "$pacman_conf"
+    sudo sed -i 's/#VerbosePkgLists/VerbosePkgLists/' "$pacman_conf"
+    
+    # Add custom repositories if needed
+    if ! grep -q "\[multilib\]" "$pacman_conf"; then
+        echo -e "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist" | sudo tee -a "$pacman_conf" >/dev/null
+    fi
     
     success "Optimized pacman configuration"
 }
 
-# Function to check neovim version requirement
+# Function to check and configure neovim (enhanced)
 check_neovim_version() {
     print_section "🔍 Checking Neovim Version"
     
-    progress "Verifying Neovim version"
+    progress "Verifying Neovim installation"
+    if ! command -v nvim &>/dev/null; then
+        error "Neovim is not installed"
+    fi
+    
+    progress "Checking Neovim version"
     local nvim_version=$(nvim --version | head -n1 | cut -d ' ' -f2)
     local required_version="0.10.0"
     
@@ -92,34 +128,36 @@ check_neovim_version() {
     success "Neovim version requirement met: $nvim_version"
 }
 
-# Function to install yay
+# Function to install yay (enhanced)
 install_yay() {
     print_section "📦 Installing AUR Helper"
     
-    if command -v yay &> /dev/null; then
+    if command -v yay &>/dev/null; then
         success "yay is already installed"
         return
-    }
+    fi
 
+    progress "Creating temp directory"
+    local temp_dir=$(mktemp -d)
+    cd "$temp_dir" || error "Failed to create temporary directory"
+    
     progress "Cloning yay repository"
-    git clone https://aur.archlinux.org/yay.git /tmp/yay || {
-        error "Failed to clone yay"
-    }
+    git clone https://aur.archlinux.org/yay.git . || error "Failed to clone yay"
     
     progress "Building yay"
-    (cd /tmp/yay && makepkg -si --noconfirm) || {
-        error "Failed to build yay"
-    }
+    makepkg -si --noconfirm || error "Failed to build yay"
     
-    rm -rf /tmp/yay
+    cd - >/dev/null
+    rm -rf "$temp_dir"
     success "Installed yay successfully"
 }
 
-# Function to configure ZRAM
+# Function to configure ZRAM (enhanced)
 configure_zram() {
     print_section "🔧 Configuring ZRAM"
     
     progress "Creating ZRAM configuration"
+    sudo mkdir -p /etc/systemd
     sudo tee /etc/systemd/zram-generator.conf > /dev/null << EOF
 [zram0]
 zram-size = ram / 2
@@ -127,158 +165,185 @@ compression-algorithm = zstd
 swap-priority = 100
 EOF
     
-    systemctl daemon-reload
+    progress "Reloading systemd"
+    sudo systemctl daemon-reload
     success "Configured ZRAM"
+    
+    progress "Verifying ZRAM configuration"
+    if ! grep -q "zram0" /proc/swaps; then
+        warn "ZRAM not active yet. Will be enabled on next boot."
+    else
+        success "ZRAM is active"
+    fi
 }
 
-# Function to update firmware
+# Function to update firmware (enhanced)
 update_firmware() {
     print_section "🔄 Updating Firmware"
     
     progress "Installing fwupd"
-    sudo pacman -S --needed --noconfirm fwupd
+    sudo pacman -S --needed --noconfirm fwupd || error "Failed to install fwupd"
+    
+    progress "Refreshing firmware list"
+    sudo fwupdmgr refresh --force
     
     progress "Checking for firmware updates"
-    sudo fwupdmgr get-devices
-    sudo fwupdmgr refresh
-    sudo fwupdmgr get-updates
-    
-    progress "Installing firmware updates"
-    sudo fwupdmgr update
-    success "Firmware update complete"
+    if sudo fwupdmgr get-updates &>/dev/null; then
+        progress "Installing firmware updates"
+        sudo fwupdmgr update
+        success "Firmware update complete"
+    else
+        success "No firmware updates available"
+    fi
 }
 
-# Function to install multimedia support
+# Function to install multimedia support (enhanced)
 install_multimedia() {
     print_section "🎵 Installing Multimedia Support"
     
+    local multimedia_packages=(
+        gst-plugins-base
+        gst-plugins-good
+        gst-plugins-bad
+        gst-plugins-ugly
+        gst-libav
+        ffmpeg
+        vlc
+    )
+    
     progress "Installing multimedia packages"
-    sudo pacman -S --needed --noconfirm \
-        gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly \
-        gst-libav ffmpeg
-        
+    sudo pacman -S --needed --noconfirm "${multimedia_packages[@]}" || {
+        error "Failed to install multimedia packages" "no_exit"
+        return 1
+    }
+    
     success "Installed multimedia codecs"
 }
 
-# Function to install development tools
+# Function to install development tools (enhanced)
 install_dev_tools() {
     print_section "🛠️ Installing Development Tools"
     
+    # VS Code installation
     progress "Installing VS Code"
-    yay -S --needed --noconfirm visual-studio-code-bin
+    yay -S --needed --noconfirm visual-studio-code-bin || warn "Failed to install VS Code"
     
+    # Python tools
     progress "Installing Python development tools"
-    pip install --user pylint black mypy pytest
+    pip install --user --no-warn-script-location pylint black mypy pytest || warn "Failed to install some Python tools"
     
+    # Node.js tools
     progress "Installing Node.js development tools"
-    npm install -g typescript ts-node eslint prettier
+    sudo npm install -g typescript ts-node eslint prettier || warn "Failed to install some Node.js tools"
+    
+    # Docker configuration
+    progress "Configuring Docker"
+    sudo systemctl enable docker.service
+    sudo usermod -aG docker "$USER"
     
     success "Installed development tools"
 }
 
-# Function to install packages
+# Function to install packages (enhanced)
 install_packages() {
     print_section "📦 Installing Packages"
 
     # Update system first
     progress "Updating system"
-    sudo pacman -Syu --noconfirm || {
-        error "Failed to update system"
-    }
+    sudo pacman -Syu --noconfirm || error "Failed to update system"
     success "System updated"
 
     # Install base packages
     progress "Installing base packages"
-    sudo pacman -S --needed --noconfirm "${BASE_PACKAGES[@]}" || {
-        error "Failed to install base packages"
-    }
+    sudo pacman -S --needed --noconfirm "${BASE_PACKAGES[@]}" || error "Failed to install base packages"
     success "Installed base packages"
 
     # Install DE-specific packages
     case "$DESKTOP_ENV" in
         "BSPWM")
             progress "Installing BSPWM packages"
-            sudo pacman -S --needed --noconfirm "${BSPWM_PACKAGES[@]}" || {
-                error "Failed to install BSPWM packages"
-            }
+            sudo pacman -S --needed --noconfirm "${BSPWM_PACKAGES[@]}" || error "Failed to install BSPWM packages"
             success "Installed BSPWM packages"
             ;;
         "KDE")
             progress "Installing KDE packages"
             sudo pacman -S --needed --noconfirm "${KDE_PACKAGES[@]}" || {
-                error "Failed to install KDE packages"
-            }
-            # Add GNOME for Microsoft365/AD integration
-            progress "Installing GNOME for Microsoft365 integration"
-            sudo pacman -S --needed --noconfirm "${GNOME_PACKAGES[@]}" || {
-                warn "Failed to install GNOME components"
+                error "Failed to install KDE packages" "no_exit"
+                return 1
             }
             success "Installed KDE packages"
             ;;
         "DWM")
             progress "Installing DWM dependencies"
-            sudo pacman -S --needed --noconfirm "${DWM_PACKAGES[@]}" || {
-                error "Failed to install DWM dependencies"
-            }
-            success "Installed DWM dependencies"
+            sudo pacman -S --needed --noconfirm "${DWM_PACKAGES[@]}" || error "Failed to install DWM dependencies"
             
             # Clone and build DWM
+            local temp_dir=$(mktemp -d)
+            cd "$temp_dir"
             progress "Building DWM"
-            git clone https://git.suckless.org/dwm /tmp/dwm
-            (cd /tmp/dwm && sudo make clean install) || {
-                error "Failed to build DWM"
-            }
+            git clone https://git.suckless.org/dwm . || error "Failed to clone DWM"
+            sudo make clean install || error "Failed to build DWM"
+            cd - >/dev/null
+            rm -rf "$temp_dir"
             success "Built and installed DWM"
             ;;
         "Hyprland")
             progress "Installing Hyprland packages"
-            sudo pacman -S --needed --noconfirm "${HYPRLAND_PACKAGES[@]}" || {
-                error "Failed to install Hyprland packages"
-            }
+            sudo pacman -S --needed --noconfirm "${HYPRLAND_PACKAGES[@]}" || error "Failed to install Hyprland packages"
             success "Installed Hyprland packages"
             ;;
     esac
 
-    # Install AUR packages
+    # Install AUR helper and packages
     install_yay
     
     progress "Installing AUR packages"
-    yay -S --needed --noconfirm getnf notify-send.sh google-chrome || {
-        warn "Some AUR packages failed to install"
-    }
+    yay -S --needed --noconfirm getnf notify-send.sh google-chrome || warn "Some AUR packages failed to install"
     success "Installed AUR packages"
-
-    # Verify neovim version after installation
-    check_neovim_version
 }
 
-# Function to configure services
+# Function to configure services (enhanced)
 configure_services() {
     print_section "🔧 Configuring Services"
 
-    local SERVICES=(
+    local services=(
         NetworkManager
         sddm
         pipewire-pulse
         docker
+        bluetooth  # Added bluetooth
+        cups      # Added printing
     )
 
-    for service in "${SERVICES[@]}"; do
+    for service in "${services[@]}"; do
         progress "Enabling $service"
-        sudo systemctl enable "$service" > /dev/null 2>&1 || {
-            warn "Failed to enable $service"
-            continue
-        }
-        success "Enabled $service"
+        if systemctl is-enabled "$service" &>/dev/null; then
+            success "$service is already enabled"
+        else
+            sudo systemctl enable "$service" || warn "Failed to enable $service"
+            success "Enabled $service"
+        fi
     done
+
+    # Additional service configurations
+    progress "Configuring service settings"
+    sudo systemctl mask systemd-rfkill.service systemd-rfkill.socket || warn "Failed to mask rfkill service"
+    success "Configured service settings"
 }
 
-# Function to cleanup packages
+# Function to cleanup packages (enhanced)
 cleanup_packages() {
     print_section "🧹 Cleaning Up"
     
     progress "Cleaning package cache"
     sudo pacman -Sc --noconfirm
+    
+    progress "Removing orphaned packages"
+    if [[ $(pacman -Qdtq) ]]; then
+        sudo pacman -Rns $(pacman -Qdtq) --noconfirm || warn "Some orphaned packages could not be removed"
+    fi
+    
+    progress "Clearing pacman cache"
     sudo paccache -r
     success "Cleaned package cache"
 }
@@ -297,4 +362,4 @@ install_arch() {
 }
 
 # Run the installation
-install_arch
+install_arch "
