@@ -368,7 +368,6 @@ main() {
     
     # Initial checks
     check_root
-    check_installation_media
     
     # Get disk configuration
     select_disks
