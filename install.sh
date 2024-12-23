@@ -197,6 +197,29 @@ check_usb() {
     success "USB permissions verified"
 }
 
+check_script_permissions() {
+    print_section "🔑 Checking Script Permissions"
+    
+    local scripts=(
+        "$SCRIPT_DIR/preinstall/arch/btrfs.sh"
+        "$SCRIPT_DIR/preinstall/arch/archinstall.sh"
+        "$SCRIPT_DIR/os/arch.sh"
+        "$SCRIPT_DIR/os/debian.sh"
+        "$SCRIPT_DIR/os/fedora.sh"
+        "$SCRIPT_DIR/os/void.sh"
+    )
+
+    for script in "${scripts[@]}"; do
+        if [ -f "$script" ]; then
+            progress "Checking permissions for $(basename $script)"
+            if [ ! -x "$script" ]; then
+                chmod +x "$script"
+            fi
+            success "$(basename $script) is executable"
+        fi
+    done
+}
+
 # Enhanced DE selection (building on your existing one)
 select_desktop_environment() {
     print_section "🖥️  Desktop Environment Selection"
@@ -364,6 +387,7 @@ main() {
     print_header
     
     # Initial checks
+    check_script_permissions
     check_prerequisites
     check_network
     check_usb
