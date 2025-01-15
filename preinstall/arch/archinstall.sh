@@ -103,6 +103,107 @@ create_config() {
     
     progress "Creating configuration file"
 
+    # Build JSON content with careful escaping
+    read -r -d '' json_content << EOF
+{
+    "additional-repositories": ["multilib"],
+    "audio": "pipewire",
+    "bootloader": "grub-install",
+    "config_version": "2.5.1",
+    "debug": true,
+    "desktop-environment": null,
+    "gfx_driver": "${graphics}",
+    "harddrives": ["${ROOT_DISK}"],
+    "hostname": "${HOSTNAME}",
+    "kernels": ["linux"],
+    "keyboard-language": "us",
+    "mirror-region": {
+        "Sweden": {
+            "https://ftp.acc.umu.se/mirror/archlinux/\\$repo/os/\\$arch": true,
+            "https://ftp.lysator.liu.se/pub/archlinux/\\$repo/os/\\$arch": true,
+            "https://ftp.myrveln.se/pub/linux/archlinux/\\$repo/os/\\$arch": true
+        }
+    },
+    "mount_points": {
+EOF
+
+    # Add mount points based on configuration
+    if [ "$BOOT_CHOICE" = "yes" ]; then
+        echo "        \"/boot\": {\"device\": \"${BOOT_PART}\", \"type\": \"ext4\"}," >> "$config_file"
+    fi
+
+    # Add remaining mount points
+    cat >> "$config_file" << EOF
+        "/": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@"},
+        "/home": {"device": "${HOME_PART}", "type": "btrfs"},
+        "/.snapshots": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@snapshots"},
+        "/var/log": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@log"},
+        "/var/cache": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@cache"}
+    },
+    "nic": {"type": "NetworkManager"},
+    "ntp": true,
+    "profile": null,
+    "packages": [
+        "git",
+        "vim",
+        "sudo",
+        "networkmanager",
+        "base-devel",
+        "linux-headers"
+    ],
+    "services": ["NetworkManager", "sshd"],
+    "sys-encoding": "utf-8",
+    "sys-language": "en_US",
+    "timezone": "Europe/Stockholm",
+    "swap": true,
+    "users": {
+        "${USERNAME}": {
+            "sudo": true,
+            "password": "${USER_PASSWORD}",
+            "shell": "/bin/bash"
+        }
+    },
+    "custom-commands": [
+        "chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}",
+        "systemctl enable NetworkManager",
+        "systemctl enable sshd",
+        "pacman -Sy --noconfirm archlinux-keyring"
+    ]
+}
+EOF
+
+    # Verify the JSON using a more robust method
+    progress "Verifying JSON syntax"
+    python3 - << EOF
+import json
+with open('${config_file}', 'r') as f:
+    try:
+        json.load(f)
+        print("JSON validation successful")
+    except json.JSONDecodeError as e:
+        print(f"JSON validation failed: {str(e)}")
+        exit(1)
+EOF
+
+    if [ $? -ne 0 ]; then
+        error "JSON validation failed. Please check the configuration."
+    fi
+    
+    success "Created and verified installation configuration"
+    
+    # Display configuration preview
+    echo -e "\n${CYAN}Configuration Preview (sensitive data hidden):${NC}"
+    grep -v "password" "$config_file" || true
+    echo
+}
+create_config() {
+    print_section "📝 Creating Installation Configuration"
+    
+    local config_file="${CONFIG_DIR}/archinstall.json"
+    local graphics=$(detect_graphics)
+    
+    progress "Creating configuration file"
+
     # Create configuration file with careful JSON formatting
     cat > "$config_file" << EOF
 {
