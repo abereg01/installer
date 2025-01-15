@@ -22,25 +22,11 @@ CHECK_MARK="\033[0;32m✓\033[0m"
 CROSS_MARK="\033[0;31m✗\033[0m"
 ARROW="→"
 
-# Helper functions for output and progress indication
-progress() {
-    echo -ne "${ITALIC}${DIM}$1...${NC}"
-}
-
-success() {
-    echo -e "\r${CHECK_MARK} $1"
-}
-
-error() {
-    echo -e "\r${CROSS_MARK} ${RED}ERROR:${NC} $1"
-    if [ "$2" != "no_exit" ]; then
-        exit 1
-    fi
-}
-
-warn() {
-    echo -e "\r${YELLOW}WARNING:${NC} $1"
-}
+# Helper functions
+progress() { echo -ne "${ITALIC}${DIM}$1...${NC}"; }
+success() { echo -e "\r${CHECK_MARK} $1"; }
+error() { echo -e "\r${CROSS_MARK} ${RED}ERROR:${NC} $1"; if [ "$2" != "no_exit" ]; then exit 1; fi; }
+warn() { echo -e "\r${YELLOW}WARNING:${NC} $1"; }
 
 print_section() {
     echo
@@ -48,25 +34,18 @@ print_section() {
     echo -e "${DIM}$(printf '%.s─' $(seq 1 $(tput cols)))${NC}"
 }
 
-# Function to verify root privileges
-verify_root() {
-    if [ "$EUID" -ne 0 ]; then
-        error "Please run as root"
-    fi
-}
-
 # Function to load and validate configurations
 load_configs() {
     print_section "📋 Loading Configurations"
     
-    # Check and load installation config
+    # Load install config
     if [ ! -f "$INSTALL_CONFIG" ]; then
         error "Installation configuration not found at $INSTALL_CONFIG"
     fi
     source "$INSTALL_CONFIG"
     success "Loaded installation config"
 
-    # Check and load disk config
+    # Load disk config
     if [ ! -f "$DISK_CONFIG" ]; then
         error "Disk configuration not found at $DISK_CONFIG"
     fi
@@ -74,22 +53,16 @@ load_configs() {
     success "Loaded disk config"
 
     # Verify required variables
-    local required_vars=(
-        "USERNAME" "ROOT_PASSWORD" "USER_PASSWORD" "HOSTNAME"
-        "ROOT_PART" "HOME_PART" "BOOT_CHOICE"
-    )
-    
+    local required_vars=("USERNAME" "ROOT_PASSWORD" "USER_PASSWORD" "HOSTNAME" "ROOT_PART" "HOME_PART" "BOOT_CHOICE")
     for var in "${required_vars[@]}"; do
         if [ -z "${!var}" ]; then
             error "Required variable $var is not set"
         fi
     done
-    
+
     if [ "$BOOT_CHOICE" = "yes" ] && [ -z "$BOOT_PART" ]; then
         error "BOOT_PART must be set when BOOT_CHOICE is yes"
     fi
-
-    success "Configuration validation complete"
 }
 
 # Function to detect graphics hardware
@@ -97,15 +70,13 @@ detect_graphics() {
     print_section "🔍 Detecting Graphics Hardware"
     
     if systemd-detect-virt --vm &>/dev/null; then
-        local graphics="vmware"
-        success "Detected VM environment"
-        echo "$graphics"
+        success "VM detected - using vmware drivers"
+        echo "vmware"
         return
     fi
     
     local gpu_info=$(lspci | grep -i vga)
-    progress "Detected GPU: $gpu_info"
-    local graphics=""
+    local graphics="default"
     
     if [[ $gpu_info =~ "NVIDIA" ]]; then
         graphics="nvidia"
@@ -117,40 +88,23 @@ detect_graphics() {
         graphics="intel"
         success "Intel GPU detected"
     else
-        graphics="default"
-        warn "Unknown GPU, using default drivers"
+        warn "Unknown GPU - using default drivers"
     fi
     
     echo "$graphics"
-}
-
-# Function to validate user configuration
-validate_user_config() {
-    print_section "✓ Validating User Configuration"
-    
-    if [ -z "$USERNAME" ] || [ -z "$USER_PASSWORD" ]; then
-        error "Username or password not set in configuration"
-    fi
-    
-    if ! [[ "$USERNAME" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
-        error "Invalid username format: $USERNAME"
-    fi
-    
-    success "User configuration validated"
 }
 
 # Function to create archinstall configuration
 create_config() {
     print_section "📝 Creating Installation Configuration"
     
-    validate_user_config
-    local graphics=$(detect_graphics)
     local config_file="${CONFIG_DIR}/archinstall.json"
+    local graphics=$(detect_graphics)
     
-    progress "Generating configuration file"
+    progress "Creating configuration file"
 
-    # Create base configuration
-    cat > "$config_file" << 'EOF'
+    # Create configuration file with careful JSON formatting
+    cat > "$config_file" << EOF
 {
     "additional-repositories": ["multilib"],
     "audio": "pipewire",
@@ -158,34 +112,29 @@ create_config() {
     "config_version": "2.5.1",
     "debug": true,
     "desktop-environment": null,
-EOF
-
-    # Add dynamic values
-    echo "    \"gfx_driver\": \"${graphics}\"," >> "$config_file"
-    echo "    \"harddrives\": [\"${ROOT_DISK}\"]," >> "$config_file"
-    echo "    \"hostname\": \"${HOSTNAME}\"," >> "$config_file"
-
-    # Add static configuration
-    cat >> "$config_file" << 'EOF'
+    "gfx_driver": "${graphics}",
+    "harddrives": ["${ROOT_DISK}"],
+    "hostname": "${HOSTNAME}",
     "kernels": ["linux"],
     "keyboard-language": "us",
     "mirror-region": {
         "Sweden": {
-            "https://ftp.acc.umu.se/mirror/archlinux/$repo/os/$arch": true,
-            "https://ftp.lysator.liu.se/pub/archlinux/$repo/os/$arch": true,
-            "https://ftp.myrveln.se/pub/linux/archlinux/$repo/os/$arch": true
+            "https://ftp.acc.umu.se/mirror/archlinux/\\\$repo/os/\\\$arch": true,
+            "https://ftp.lysator.liu.se/pub/archlinux/\\\$repo/os/\\\$arch": true,
+            "https://ftp.myrveln.se/pub/linux/archlinux/\\\$repo/os/\\\$arch": true
         }
     },
+    "mount_points": {
 EOF
 
-    # Add mount points
-    echo "    \"mount_points\": {" >> "$config_file"
-    
+    # Add boot mount point if needed
     if [ "$BOOT_CHOICE" = "yes" ]; then
-        echo "        \"/boot\": {\"device\": \"${BOOT_PART}\", \"type\": \"ext4\"}," >> "$config_file"
+        cat >> "$config_file" << EOF
+        "/boot": {"device": "${BOOT_PART}", "type": "ext4"},
+EOF
     fi
 
-    # Add BTRFS mount points
+    # Add remaining mount points
     cat >> "$config_file" << EOF
         "/": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@"},
         "/home": {"device": "${HOME_PART}", "type": "btrfs"},
@@ -193,10 +142,6 @@ EOF
         "/var/log": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@log"},
         "/var/cache": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@cache"}
     },
-EOF
-
-    # Add remaining configuration
-    cat >> "$config_file" << EOF
     "nic": {"type": "NetworkManager"},
     "ntp": true,
     "profile": null,
@@ -212,7 +157,6 @@ EOF
     "sys-encoding": "utf-8",
     "sys-language": "en_US",
     "timezone": "Europe/Stockholm",
-    "bootloader": "grub-install",
     "swap": true,
     "users": {
         "${USERNAME}": {
@@ -230,17 +174,17 @@ EOF
 }
 EOF
 
-    # Verify JSON syntax
+    # Verify JSON syntax using Python (more reliable than jq for this case)
     progress "Verifying JSON syntax"
-    if command -v python &>/dev/null; then
-        if ! python -m json.tool "$config_file" >/dev/null 2>&1; then
-            error "Generated JSON is invalid. Please check the configuration."
-        fi
+    if ! python -c "import json; json.load(open('${config_file}'));" 2>/dev/null; then
+        echo -e "\n${RED}JSON Validation Error:${NC}"
+        python -c "import json; json.load(open('${config_file}'));" 2>&1
+        error "Invalid JSON configuration generated"
     fi
-
+    
     success "Created and verified installation configuration"
     
-    # Show configuration preview
+    # Show configuration preview (excluding sensitive data)
     echo -e "\n${CYAN}Configuration Preview (sensitive data hidden):${NC}"
     grep -v "password" "$config_file" || true
     echo
@@ -254,10 +198,10 @@ run_installation() {
     if ! archinstall --config "${CONFIG_DIR}/archinstall.json" --disk_layouts none; then
         error "Installation failed"
     fi
-    success "Installation completed successfully"
+    success "Installation completed"
 }
 
-# Function to copy SSH keys to the new user
+# Function to copy SSH keys
 copy_ssh_to_user() {
     print_section "🔑 Setting up User SSH Keys"
     
@@ -271,26 +215,16 @@ copy_ssh_to_user() {
         chmod 600 "$user_home/.ssh/"*
         success "SSH keys configured for $USERNAME"
     else
-        warn "No SSH keys found in root. Keys will need to be set up manually."
+        warn "No SSH keys found in root"
     fi
-}
-
-# Function to display success message
-print_success() {
-    echo
-    echo -e "${GREEN}${BOLD}Installation Complete!${NC}"
-    echo "You can now:"
-    echo "1. Review any warnings or messages above"
-    echo "2. Restart your system to boot into the new installation"
-    echo "3. Log in with your username: $USERNAME"
-    echo
-    echo -e "${YELLOW}Note:${NC} Remember to remove the installation media before rebooting."
-    echo
 }
 
 # Main function
 main() {
-    verify_root
+    if [ "$EUID" -ne 0 ]; then
+        error "Please run as root"
+    fi
+
     load_configs
     create_config
     run_installation
@@ -298,10 +232,8 @@ main() {
     if [[ "$COPY_SSH" =~ ^(y|yes)$ ]]; then
         copy_ssh_to_user
     fi
-    
-    print_success
 }
 
-# Run the script with error handling
+# Run with error handling
 trap 'error "An error occurred. Check the output above for details."' ERR
 main "$@"
