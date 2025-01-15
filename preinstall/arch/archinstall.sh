@@ -54,15 +54,15 @@ print_section() {
 verify_environment() {
     print_section "🔍 Verifying Environment"
 
-    # Check if running from Arch ISO
-    if [ ! -f /etc/arch-release ]; then
+    # Check if running from Arch ISO and not an installed system
+    if [ ! -f /etc/arch-release ] || [ -f /etc/hostname ]; then
         error "This script must be run from Arch installation media"
     fi
 
     # Check if root
     if [ "$EUID" -ne 0 ]; then
         error "Please run as root"
-    }
+    fi
 
     success "Environment verified"
 }
