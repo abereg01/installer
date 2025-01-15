@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 
-# Script version
+# Script version and configuration paths
 VERSION="1.0.0"
-
-# Default paths
 CONFIG_DIR="/root"
 INSTALL_CONFIG="${CONFIG_DIR}/install_config"
 DISK_CONFIG="${CONFIG_DIR}/disk_config.txt"
@@ -24,7 +22,7 @@ CHECK_MARK="\033[0;32m✓\033[0m"
 CROSS_MARK="\033[0;31m✗\033[0m"
 ARROW="→"
 
-# Helper functions
+# Helper functions for output and progress indication
 progress() {
     echo -ne "${ITALIC}${DIM}$1...${NC}"
 }
@@ -50,16 +48,25 @@ print_section() {
     echo -e "${DIM}$(printf '%.s─' $(seq 1 $(tput cols)))${NC}"
 }
 
-# Function to load configurations
+# Function to verify root privileges
+verify_root() {
+    if [ "$EUID" -ne 0 ]; then
+        error "Please run as root"
+    fi
+}
+
+# Function to load and validate configurations
 load_configs() {
     print_section "📋 Loading Configurations"
     
+    # Check and load installation config
     if [ ! -f "$INSTALL_CONFIG" ]; then
         error "Installation configuration not found at $INSTALL_CONFIG"
     fi
     source "$INSTALL_CONFIG"
     success "Loaded installation config"
 
+    # Check and load disk config
     if [ ! -f "$DISK_CONFIG" ]; then
         error "Disk configuration not found at $DISK_CONFIG"
     fi
@@ -82,10 +89,10 @@ load_configs() {
         error "BOOT_PART must be set when BOOT_CHOICE is yes"
     fi
 
-    success "All required variables verified"
+    success "Configuration validation complete"
 }
 
-# Function to detect graphics
+# Function to detect graphics hardware
 detect_graphics() {
     print_section "🔍 Detecting Graphics Hardware"
     
@@ -117,14 +124,33 @@ detect_graphics() {
     echo "$graphics"
 }
 
+# Function to validate user configuration
+validate_user_config() {
+    print_section "✓ Validating User Configuration"
+    
+    if [ -z "$USERNAME" ] || [ -z "$USER_PASSWORD" ]; then
+        error "Username or password not set in configuration"
+    fi
+    
+    if ! [[ "$USERNAME" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+        error "Invalid username format: $USERNAME"
+    fi
+    
+    success "User configuration validated"
+}
+
 # Function to create archinstall configuration
 create_config() {
-    print_section "📝 Creating Archinstall Configuration"
+    print_section "📝 Creating Installation Configuration"
     
+    validate_user_config
     local graphics=$(detect_graphics)
-    progress "Creating configuration file"
+    local config_file="${CONFIG_DIR}/archinstall.json"
     
-    cat > "${CONFIG_DIR}/archinstall.json" << EOF
+    progress "Generating configuration file"
+
+    # Create base configuration
+    cat > "$config_file" << 'EOF'
 {
     "additional-repositories": ["multilib"],
     "audio": "pipewire",
@@ -132,43 +158,57 @@ create_config() {
     "config_version": "2.5.1",
     "debug": true,
     "desktop-environment": null,
-    "gfx_driver": "${graphics}",
-    "harddrives": ["${ROOT_DISK}"],
-    "hostname": "${HOSTNAME}",
+EOF
+
+    # Add dynamic values
+    echo "    \"gfx_driver\": \"${graphics}\"," >> "$config_file"
+    echo "    \"harddrives\": [\"${ROOT_DISK}\"]," >> "$config_file"
+    echo "    \"hostname\": \"${HOSTNAME}\"," >> "$config_file"
+
+    # Add static configuration
+    cat >> "$config_file" << 'EOF'
     "kernels": ["linux"],
     "keyboard-language": "us",
     "mirror-region": {
         "Sweden": {
-            "http://ftp.acc.umu.se/mirror/archlinux/\$repo/os/\$arch": true,
-            "http://ftp.lysator.liu.se/pub/archlinux/\$repo/os/\$arch": true,
-            "http://ftp.myrveln.se/pub/linux/archlinux/\$repo/os/\$arch": true,
-            "https://ftp.acc.umu.se/mirror/archlinux/\$repo/os/\$arch": true,
-            "https://ftp.lysator.liu.se/pub/archlinux/\$repo/os/\$arch": true,
-            "https://ftp.myrveln.se/pub/linux/archlinux/\$repo/os/\$arch": true
+            "https://ftp.acc.umu.se/mirror/archlinux/$repo/os/$arch": true,
+            "https://ftp.lysator.liu.se/pub/archlinux/$repo/os/$arch": true,
+            "https://ftp.myrveln.se/pub/linux/archlinux/$repo/os/$arch": true
         }
     },
-    "mount_points": {
 EOF
 
-    # Add mount points based on disk configuration
+    # Add mount points
+    echo "    \"mount_points\": {" >> "$config_file"
+    
     if [ "$BOOT_CHOICE" = "yes" ]; then
-        cat >> "${CONFIG_DIR}/archinstall.json" << EOF
-        "/boot": {"device": "${BOOT_PART}", "type": "ext4"},
-EOF
+        echo "        \"/boot\": {\"device\": \"${BOOT_PART}\", \"type\": \"ext4\"}," >> "$config_file"
     fi
 
-    cat >> "${CONFIG_DIR}/archinstall.json" << EOF
+    # Add BTRFS mount points
+    cat >> "$config_file" << EOF
         "/": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@"},
         "/home": {"device": "${HOME_PART}", "type": "btrfs"},
         "/.snapshots": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@snapshots"},
         "/var/log": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@log"},
         "/var/cache": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@cache"}
     },
+EOF
+
+    # Add remaining configuration
+    cat >> "$config_file" << EOF
     "nic": {"type": "NetworkManager"},
     "ntp": true,
     "profile": null,
-    "packages": ["git", "vim", "sudo", "networkmanager"],
-    "services": ["NetworkManager"],
+    "packages": [
+        "git",
+        "vim",
+        "sudo",
+        "networkmanager",
+        "base-devel",
+        "linux-headers"
+    ],
+    "services": ["NetworkManager", "sshd"],
     "sys-encoding": "utf-8",
     "sys-language": "en_US",
     "timezone": "Europe/Stockholm",
@@ -184,17 +224,31 @@ EOF
     "custom-commands": [
         "chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}",
         "systemctl enable NetworkManager",
-        "systemctl enable sshd"
+        "systemctl enable sshd",
+        "pacman -Sy --noconfirm archlinux-keyring"
     ]
 }
 EOF
 
-    success "Created archinstall configuration"
+    # Verify JSON syntax
+    progress "Verifying JSON syntax"
+    if command -v python &>/dev/null; then
+        if ! python -m json.tool "$config_file" >/dev/null 2>&1; then
+            error "Generated JSON is invalid. Please check the configuration."
+        fi
+    fi
+
+    success "Created and verified installation configuration"
+    
+    # Show configuration preview
+    echo -e "\n${CYAN}Configuration Preview (sensitive data hidden):${NC}"
+    grep -v "password" "$config_file" || true
+    echo
 }
 
-# Function to run archinstall
+# Function to run the installation
 run_installation() {
-    print_section "🚀 Running Arch Installation"
+    print_section "🚀 Running System Installation"
     
     progress "Starting archinstall"
     if ! archinstall --config "${CONFIG_DIR}/archinstall.json" --disk_layouts none; then
@@ -203,7 +257,7 @@ run_installation() {
     success "Installation completed successfully"
 }
 
-# Function to copy SSH keys
+# Function to copy SSH keys to the new user
 copy_ssh_to_user() {
     print_section "🔑 Setting up User SSH Keys"
     
@@ -221,16 +275,22 @@ copy_ssh_to_user() {
     fi
 }
 
+# Function to display success message
+print_success() {
+    echo
+    echo -e "${GREEN}${BOLD}Installation Complete!${NC}"
+    echo "You can now:"
+    echo "1. Review any warnings or messages above"
+    echo "2. Restart your system to boot into the new installation"
+    echo "3. Log in with your username: $USERNAME"
+    echo
+    echo -e "${YELLOW}Note:${NC} Remember to remove the installation media before rebooting."
+    echo
+}
+
 # Main function
 main() {
-    print_section "🚀 Starting Arch Installation"
-    
-    # Check if we're root
-    if [ "$EUID" -ne 0 ]; then
-        error "Please run as root"
-    fi
-
-    # Load configurations and proceed
+    verify_root
     load_configs
     create_config
     run_installation
@@ -238,7 +298,10 @@ main() {
     if [[ "$COPY_SSH" =~ ^(y|yes)$ ]]; then
         copy_ssh_to_user
     fi
+    
+    print_success
 }
 
-# Run the script
+# Run the script with error handling
+trap 'error "An error occurred. Check the output above for details."' ERR
 main "$@"
