@@ -6,7 +6,7 @@ CONFIG_DIR="/root"
 INSTALL_CONFIG="${CONFIG_DIR}/install_config"
 DISK_CONFIG="${CONFIG_DIR}/disk_config.txt"
 
-# Colors and styling
+# Colors and styling for better user feedback
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
@@ -17,52 +17,66 @@ DIM='\033[2m'
 ITALIC='\033[3m'
 NC='\033[0m'
 
-# Unicode symbols
+# Unicode symbols for status indicators
 CHECK_MARK="\033[0;32m✓\033[0m"
 CROSS_MARK="\033[0;31m✗\033[0m"
 ARROW="→"
 
-# Helper functions
+# Helper functions for consistent output formatting
 progress() { echo -ne "${ITALIC}${DIM}$1...${NC}"; }
 success() { echo -e "\r${CHECK_MARK} $1"; }
 error() { echo -e "\r${CROSS_MARK} ${RED}ERROR:${NC} $1"; if [ "$2" != "no_exit" ]; then exit 1; fi; }
 warn() { echo -e "\r${YELLOW}WARNING:${NC} $1"; }
 
+# Function to print section headers
 print_section() {
     echo
     echo -e "${CYAN}${BOLD}$1${NC}"
     echo -e "${DIM}$(printf '%.s─' $(seq 1 $(tput cols)))${NC}"
 }
 
+# Function to verify root privileges
+verify_root() {
+    if [ "$EUID" -ne 0 ]; then
+        error "Please run as root"
+    fi
+}
+
 # Function to load and validate configurations
 load_configs() {
     print_section "📋 Loading Configurations"
     
-    # Load install config
+    # Check and load installation config
     if [ ! -f "$INSTALL_CONFIG" ]; then
         error "Installation configuration not found at $INSTALL_CONFIG"
     fi
     source "$INSTALL_CONFIG"
     success "Loaded installation config"
 
-    # Load disk config
+    # Check and load disk config
     if [ ! -f "$DISK_CONFIG" ]; then
         error "Disk configuration not found at $DISK_CONFIG"
     fi
     source "$DISK_CONFIG"
     success "Loaded disk config"
 
-    # Verify required variables
-    local required_vars=("USERNAME" "ROOT_PASSWORD" "USER_PASSWORD" "HOSTNAME" "ROOT_PART" "HOME_PART" "BOOT_CHOICE")
+    # Verify all required variables are set
+    local required_vars=(
+        "USERNAME" "ROOT_PASSWORD" "USER_PASSWORD" "HOSTNAME"
+        "ROOT_PART" "HOME_PART" "BOOT_CHOICE"
+    )
+    
     for var in "${required_vars[@]}"; do
         if [ -z "${!var}" ]; then
             error "Required variable $var is not set"
         fi
     done
-
+    
     if [ "$BOOT_CHOICE" = "yes" ] && [ -z "$BOOT_PART" ]; then
         error "BOOT_PART must be set when BOOT_CHOICE is yes"
     fi
+
+    success "Configuration validation complete"
 }
 
 # Function to detect graphics hardware
@@ -94,7 +108,7 @@ detect_graphics() {
     echo "$graphics"
 }
 
-# Function to create archinstall configuration
+# Function to create and validate archinstall configuration
 create_config() {
     print_section "📝 Creating Installation Configuration"
     
@@ -103,15 +117,18 @@ create_config() {
     
     progress "Creating configuration file"
 
-    # Build JSON content with careful escaping
-    read -r -d '' json_content << EOF
-{
+    # Use Python to generate valid JSON configuration
+    python3 - << EOF
+import json
+
+# Build the configuration dictionary
+config = {
     "additional-repositories": ["multilib"],
     "audio": "pipewire",
     "bootloader": "grub-install",
     "config_version": "2.5.1",
-    "debug": true,
-    "desktop-environment": null,
+    "debug": True,
+    "desktop-environment": None,
     "gfx_driver": "${graphics}",
     "harddrives": ["${ROOT_DISK}"],
     "hostname": "${HOSTNAME}",
@@ -119,21 +136,12 @@ create_config() {
     "keyboard-language": "us",
     "mirror-region": {
         "Sweden": {
-            "https://ftp.acc.umu.se/mirror/archlinux/\\$repo/os/\\$arch": true,
-            "https://ftp.lysator.liu.se/pub/archlinux/\\$repo/os/\\$arch": true,
-            "https://ftp.myrveln.se/pub/linux/archlinux/\\$repo/os/\\$arch": true
+            "https://ftp.acc.umu.se/mirror/archlinux/\$repo/os/\$arch": True,
+            "https://ftp.lysator.liu.se/pub/archlinux/\$repo/os/\$arch": True,
+            "https://ftp.myrveln.se/pub/linux/archlinux/\$repo/os/\$arch": True
         }
     },
     "mount_points": {
-EOF
-
-    # Add mount points based on configuration
-    if [ "$BOOT_CHOICE" = "yes" ]; then
-        echo "        \"/boot\": {\"device\": \"${BOOT_PART}\", \"type\": \"ext4\"}," >> "$config_file"
-    fi
-
-    # Add remaining mount points
-    cat >> "$config_file" << EOF
         "/": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@"},
         "/home": {"device": "${HOME_PART}", "type": "btrfs"},
         "/.snapshots": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@snapshots"},
@@ -141,8 +149,8 @@ EOF
         "/var/cache": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@cache"}
     },
     "nic": {"type": "NetworkManager"},
-    "ntp": true,
-    "profile": null,
+    "ntp": True,
+    "profile": None,
     "packages": [
         "git",
         "vim",
@@ -155,10 +163,10 @@ EOF
     "sys-encoding": "utf-8",
     "sys-language": "en_US",
     "timezone": "Europe/Stockholm",
-    "swap": true,
+    "swap": True,
     "users": {
         "${USERNAME}": {
-            "sudo": true,
+            "sudo": True,
             "password": "${USER_PASSWORD}",
             "shell": "/bin/bash"
         }
@@ -170,128 +178,40 @@ EOF
         "pacman -Sy --noconfirm archlinux-keyring"
     ]
 }
-EOF
 
-    # Verify the JSON using a more robust method
-    progress "Verifying JSON syntax"
-    python3 - << EOF
-import json
-with open('${config_file}', 'r') as f:
-    try:
-        json.load(f)
-        print("JSON validation successful")
-    except json.JSONDecodeError as e:
-        print(f"JSON validation failed: {str(e)}")
-        exit(1)
+# Add boot partition if specified
+if "${BOOT_CHOICE}" == "yes":
+    config["mount_points"]["/boot"] = {"device": "${BOOT_PART}", "type": "ext4"}
+
+# Write the configuration to file with proper formatting
+with open("${config_file}", "w") as f:
+    json.dump(config, f, indent=4)
+
+# Validate the JSON
+with open("${config_file}", "r") as f:
+    json.load(f)
+
+print("Configuration successfully created and validated")
 EOF
 
     if [ $? -ne 0 ]; then
-        error "JSON validation failed. Please check the configuration."
+        error "Failed to create configuration file"
     fi
     
     success "Created and verified installation configuration"
     
-    # Display configuration preview
+    # Display configuration preview (excluding sensitive data)
     echo -e "\n${CYAN}Configuration Preview (sensitive data hidden):${NC}"
     grep -v "password" "$config_file" || true
     echo
-}
-create_config() {
-    print_section "📝 Creating Installation Configuration"
-    
-    local config_file="${CONFIG_DIR}/archinstall.json"
-    local graphics=$(detect_graphics)
-    
-    progress "Creating configuration file"
 
-    # Create configuration file with careful JSON formatting
-    cat > "$config_file" << EOF
-{
-    "additional-repositories": ["multilib"],
-    "audio": "pipewire",
-    "bootloader": "grub-install",
-    "config_version": "2.5.1",
-    "debug": true,
-    "desktop-environment": null,
-    "gfx_driver": "${graphics}",
-    "harddrives": ["${ROOT_DISK}"],
-    "hostname": "${HOSTNAME}",
-    "kernels": ["linux"],
-    "keyboard-language": "us",
-    "mirror-region": {
-        "Sweden": {
-            "https://ftp.acc.umu.se/mirror/archlinux/\\\$repo/os/\\\$arch": true,
-            "https://ftp.lysator.liu.se/pub/archlinux/\\\$repo/os/\\\$arch": true,
-            "https://ftp.myrveln.se/pub/linux/archlinux/\\\$repo/os/\\\$arch": true
-        }
-    },
-    "mount_points": {
-EOF
-
-    # Add boot mount point if needed
-    if [ "$BOOT_CHOICE" = "yes" ]; then
-        cat >> "$config_file" << EOF
-        "/boot": {"device": "${BOOT_PART}", "type": "ext4"},
-EOF
+    # Verify the configuration file exists and has content
+    if [ ! -s "$config_file" ]; then
+        error "Configuration file is empty or missing"
     fi
-
-    # Add remaining mount points
-    cat >> "$config_file" << EOF
-        "/": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@"},
-        "/home": {"device": "${HOME_PART}", "type": "btrfs"},
-        "/.snapshots": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@snapshots"},
-        "/var/log": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@log"},
-        "/var/cache": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@cache"}
-    },
-    "nic": {"type": "NetworkManager"},
-    "ntp": true,
-    "profile": null,
-    "packages": [
-        "git",
-        "vim",
-        "sudo",
-        "networkmanager",
-        "base-devel",
-        "linux-headers"
-    ],
-    "services": ["NetworkManager", "sshd"],
-    "sys-encoding": "utf-8",
-    "sys-language": "en_US",
-    "timezone": "Europe/Stockholm",
-    "swap": true,
-    "users": {
-        "${USERNAME}": {
-            "sudo": true,
-            "password": "${USER_PASSWORD}",
-            "shell": "/bin/bash"
-        }
-    },
-    "custom-commands": [
-        "chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}",
-        "systemctl enable NetworkManager",
-        "systemctl enable sshd",
-        "pacman -Sy --noconfirm archlinux-keyring"
-    ]
-}
-EOF
-
-    # Verify JSON syntax using Python (more reliable than jq for this case)
-    progress "Verifying JSON syntax"
-    if ! python -c "import json; json.load(open('${config_file}'));" 2>/dev/null; then
-        echo -e "\n${RED}JSON Validation Error:${NC}"
-        python -c "import json; json.load(open('${config_file}'));" 2>&1
-        error "Invalid JSON configuration generated"
-    fi
-    
-    success "Created and verified installation configuration"
-    
-    # Show configuration preview (excluding sensitive data)
-    echo -e "\n${CYAN}Configuration Preview (sensitive data hidden):${NC}"
-    grep -v "password" "$config_file" || true
-    echo
 }
 
-# Function to run the installation
+# Function to run the actual installation
 run_installation() {
     print_section "🚀 Running System Installation"
     
@@ -302,7 +222,7 @@ run_installation() {
     success "Installation completed"
 }
 
-# Function to copy SSH keys
+# Function to copy SSH keys to the new user
 copy_ssh_to_user() {
     print_section "🔑 Setting up User SSH Keys"
     
@@ -320,12 +240,9 @@ copy_ssh_to_user() {
     fi
 }
 
-# Main function
+# Main execution function
 main() {
-    if [ "$EUID" -ne 0 ]; then
-        error "Please run as root"
-    fi
-
+    verify_root
     load_configs
     create_config
     run_installation
@@ -335,6 +252,6 @@ main() {
     fi
 }
 
-# Run with error handling
+# Run the script with error handling
 trap 'error "An error occurred. Check the output above for details."' ERR
 main "$@"
