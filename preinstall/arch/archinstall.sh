@@ -71,21 +71,50 @@ create_config() {
     config_file="${CONFIG_DIR}/archinstall.json"
     graphics=$(detect_graphics)
     
+    # Export additional configuration for disks
+    export INSTALL_CONFIG_FILE="$config_file"
+    
     progress "Creating configuration file"
 
-    # Export all necessary variables for Python
-    export INSTALL_GRAPHICS="$graphics"
-    export INSTALL_ROOT_DISK="$ROOT_DISK"
-    export INSTALL_HOSTNAME="$HOSTNAME"
-    export INSTALL_USERNAME="$USERNAME"
-    export INSTALL_PASSWORD="$USER_PASSWORD"
-    export INSTALL_ROOT_PART="$ROOT_PART"
-    export INSTALL_HOME_PART="$HOME_PART"
-    export INSTALL_BOOT_PART="$BOOT_PART"
-    export INSTALL_BOOT_CHOICE="$BOOT_CHOICE"
-    export CONFIG_FILE="$config_file"
-
     # Create the configuration using Python
+    python3 - << 'EOF'
+import json
+import os
+
+# Get the configuration file path from environment
+config_file = os.environ['INSTALL_CONFIG_FILE']
+
+# Get all our installation variables from environment
+graphics = os.environ['INSTALL_GRAPHICS']
+root_disk = os.environ['INSTALL_ROOT_DISK']
+hostname = os.environ['INSTALL_HOSTNAME']
+username = os.environ['INSTALL_USERNAME']
+password = os.environ['INSTALL_PASSWORD']
+root_password = os.environ['ROOT_PASSWORD']
+root_part = os.environ['INSTALL_ROOT_PART']
+home_part = os.environ['INSTALL_HOME_PART']
+boot_part = os.environ['INSTALL_BOOT_PART']
+boot_choice = os.environ['INSTALL_BOOT_CHOICE']
+
+# Create a disk layout configuration
+disk_layout = {
+    "config_type": "manual",
+    "device": root_disk,
+    "partitions": [
+        {
+            "mountpoint": "/",
+            "filesystem": "btrfs",
+            "device": root_part,
+            "options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@"]
+        },
+        {
+            "mountpoint": "/home",
+            "filesystem": "btrfs",
+            "device": home_part,
+            "options": ["compress=zstd", "space_cache=v2", "noatime"]
+        }
+    ]
+}
     python3 - << 'EOF'
 import json
 import os
@@ -107,8 +136,69 @@ boot_choice = os.environ['INSTALL_BOOT_CHOICE']
 # Create the configuration dictionary
 config = {
     "additional-repositories": ["multilib"],
-    "audio": "pipewire",
+    "audio": "Pipewire",
     "bootloader": "Grub",
+    "config_version": "2.5.1",
+    "debug": True,
+    "desktop-environment": None,
+    "gfx_driver": graphics,
+    "harddrives": [root_disk],
+    "hostname": hostname,
+    "kernels": ["linux"],
+    "keyboard-language": "us",
+    "mirror-region": {
+        "Sweden": {
+            "https://ftp.acc.umu.se/mirror/archlinux/$repo/os/$arch": True,
+            "https://ftp.lysator.liu.se/pub/archlinux/$repo/os/$arch": True,
+            "https://ftp.myrveln.se/pub/linux/archlinux/$repo/os/$arch": True
+        }
+    },
+    "mount_points": {
+        "/": {"device": root_part, "type": "btrfs", "subvolume": "@"},
+        "/home": {"device": home_part, "type": "btrfs"},
+        "/.snapshots": {"device": root_part, "type": "btrfs", "subvolume": "@snapshots"},
+        "/var/log": {"device": root_part, "type": "btrfs", "subvolume": "@log"},
+        "/var/cache": {"device": root_part, "type": "btrfs", "subvolume": "@cache"}
+    },
+    "network": {
+        "type": "NetworkManager",
+        "config_type": "nm"
+    },
+    "ntp": True,
+    "profile": None,
+    "packages": [
+        "git",
+        "vim",
+        "sudo",
+        "networkmanager",
+        "base-devel",
+        "linux-headers"
+    ],
+    "services": ["NetworkManager", "sshd"],
+    "sys-encoding": "utf-8",
+    "sys-language": "en_US",
+    "timezone": "Europe/Stockholm",
+    "swap": True,
+    "root-password": root_password,
+    "superusers": {
+        username: {
+            "password": password
+        }
+    },
+    "users": {
+        username: {
+            "sudo": True,
+            "password": password,
+            "shell": "/bin/bash"
+        }
+    },
+    "custom-commands": [
+        f"chown -R {username}:{username} /home/{username}",
+        "systemctl enable NetworkManager",
+        "systemctl enable sshd",
+        "pacman -Sy --noconfirm archlinux-keyring"
+    ]
+}
     "config_version": "2.5.1",
     "debug": True,
     "desktop-environment": None,
@@ -147,6 +237,14 @@ config = {
     "sys-language": "en_US",
     "timezone": "Europe/Stockholm",
     "swap": True,
+    # Add the root password configuration
+    "root-password": os.environ['ROOT_PASSWORD'],
+    # Update the user configuration format
+    "superusers": {
+        username: {
+            "password": password
+        }
+    },
     "users": {
         username: {
             "sudo": True,
@@ -154,6 +252,13 @@ config = {
             "shell": "/bin/bash"
         }
     },
+    "custom-commands": [
+        f"chown -R {username}:{username} /home/{username}",
+        "systemctl enable NetworkManager",
+        "systemctl enable sshd",
+        "pacman -Sy --noconfirm archlinux-keyring"
+    ]
+}
     "custom-commands": [
         f"chown -R {username}:{username} /home/{username}",
         "systemctl enable NetworkManager",
@@ -197,7 +302,11 @@ run_installation() {
     print_section "🚀 Running System Installation"
     
     progress "Starting archinstall"
-    if ! archinstall --config "${CONFIG_DIR}/archinstall.json" --disk_layouts none; then
+    if ! archinstall \
+        --config "${CONFIG_DIR}/archinstall.json" \
+        --silent \
+        --disk-layout manual \
+        --disk-encryption disable; then
         error "Installation failed"
     fi
     success "Installation completed"
