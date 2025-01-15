@@ -478,6 +478,8 @@ save_disk_config() {
     print_section "💾 Saving Disk Configuration"
     
     progress "Saving disk configuration"
+    
+    # Save configuration for the installed system
     mkdir -p /mnt/root
     cat > /mnt/root/disk_config.txt << EOF
 ROOT_DISK=$ROOT_DISK
@@ -487,7 +489,35 @@ ROOT_PART=$ROOT_PART
 HOME_PART=$HOME_PART
 BOOT_PART=$BOOT_PART
 EOF
-    success "Saved disk configuration"
+
+    # Also save configuration for the installation process
+    cat > /root/disk_config.txt << EOF
+ROOT_DISK=$ROOT_DISK
+HOME_DISK=$HOME_DISK
+BOOT_CHOICE=$BOOT_CHOICE
+ROOT_PART=$ROOT_PART
+HOME_PART=$HOME_PART
+BOOT_PART=$BOOT_PART
+EOF
+
+    # Set proper permissions
+    chmod 600 /root/disk_config.txt
+    chmod 600 /mnt/root/disk_config.txt
+    
+    # Verify the configuration was saved
+    if [ ! -f "/root/disk_config.txt" ]; then
+        error "Failed to save disk configuration to /root"
+    fi
+    if [ ! -f "/mnt/root/disk_config.txt" ]; then
+        error "Failed to save disk configuration to /mnt/root"
+    fi
+
+    success "Saved disk configuration to both locations"
+    
+    # Display the configuration for verification
+    echo -e "\n${CYAN}Disk Configuration:${NC}"
+    cat "/root/disk_config.txt"
+    echo
 }
 
 # Function to print next steps
