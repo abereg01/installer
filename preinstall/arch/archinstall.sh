@@ -3,87 +3,135 @@
 # Script version
 VERSION="1.0.0"
 
-# Import styling from main script if exists
-if [ -f "../../../install.sh" ]; then
-    source "../../../install.sh"
-else
-    # Fallback styling
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    YELLOW='\033[0;33m'
-    BLUE='\033[0;34m'
-    BOLD='\033[1m'
-    NC='\033[0m'
-    CHECK_MARK="\033[0;32m✓\033[0m"
-    CROSS_MARK="\033[0;31m✗\033[0m"
-    ARROW="→"
-fi
+# Default path for configs
+CONFIG_DIR="/root"
+INSTALL_CONFIG="${CONFIG_DIR}/install_config"
+DISK_CONFIG="${CONFIG_DIR}/disk_config.txt"
 
-# Load user configuration
-if [ ! -f "/root/install_config" ]; then
-    error "Installation configuration not found"
-fi
-source /root/install_config
+# Source styling directly instead of trying to locate install.sh
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+BOLD='\033[1m'
+NC='\033[0m'
+CHECK_MARK="\033[0;32m✓\033[0m"
+CROSS_MARK="\033[0;31m✗\033[0m"
+ARROW="→"
 
-# Load disk configuration
-if [ ! -f "/root/disk_config.txt" ]; then
-    error "Disk configuration not found"
-fi
-source /root/disk_config.txt
+# Helper functions
+progress() {
+    echo -ne "${ITALIC}${DIM}$1...${NC}"
+}
 
-# Detect graphics card
+success() {
+    echo -e "\r${CHECK_MARK} $1"
+}
+
+error() {
+    echo -e "\r${CROSS_MARK} ${RED}ERROR:${NC} $1"
+    if [ "$2" != "no_exit" ]; then
+        exit 1
+    fi
+}
+
+warn() {
+    echo -e "\r${YELLOW}WARNING:${NC} $1"
+}
+
+print_section() {
+    echo
+    echo -e "${CYAN}${BOLD}$1${NC}"
+    echo -e "${DIM}$(printf '%.s─' $(seq 1 $(tput cols)))${NC}"
+}
+
+# Load configurations
+load_configs() {
+    print_section "📋 Loading Configurations"
+    
+    if [ ! -f "$INSTALL_CONFIG" ]; then
+        error "Installation configuration not found at $INSTALL_CONFIG"
+    fi
+    source "$INSTALL_CONFIG"
+    success "Loaded installation config"
+
+    if [ ! -f "$DISK_CONFIG" ]; then
+        error "Disk configuration not found at $DISK_CONFIG"
+    fi
+    source "$DISK_CONFIG"
+    success "Loaded disk config"
+
+    # Verify required variables
+    local required_vars=(
+        "USERNAME" "ROOT_PASSWORD" "USER_PASSWORD" "HOSTNAME"
+        "ROOT_PART" "HOME_PART" "BOOT_CHOICE"
+    )
+    
+    for var in "${required_vars[@]}"; do
+        if [ -z "${!var}" ]; then
+            error "Required variable $var is not set"
+        fi
+    done
+    
+    if [ "$BOOT_CHOICE" = "yes" ] && [ -z "$BOOT_PART" ]; then
+        error "BOOT_PART must be set when BOOT_CHOICE is yes"
+    fi
+}
+
+# Detect graphics hardware
 detect_graphics() {
     print_section "🔍 Detecting Graphics Hardware"
     
     # VM Detection
     if systemd-detect-virt --vm &>/dev/null; then
-        success "Running in VM, using VMware/VirtualBox drivers"
-        echo "VMware / VirtualBox (open-source)"
+        local graphics="vmware"
+        success "Detected VM environment, using vmware drivers"
+        echo "$graphics"
         return
     fi
     
     # Hardware detection
     local gpu_info=$(lspci | grep -i vga)
-    progress "Detected GPU: $gpu_info"
+    local graphics=""
     
     if [[ $gpu_info =~ "NVIDIA" ]]; then
-        success "NVIDIA GPU detected, using proprietary drivers"
-        echo "NVIDIA (proprietary)"
+        graphics="nvidia"
+        success "Detected NVIDIA GPU"
     elif [[ $gpu_info =~ "AMD" ]] || [[ $gpu_info =~ "ATI" ]]; then
-        success "AMD GPU detected, using open-source drivers"
-        echo "AMD / ATI (open-source)"
+        graphics="amd"
+        success "Detected AMD GPU"
     elif [[ $gpu_info =~ "Intel" ]]; then
-        success "Intel GPU detected, using open-source drivers"
-        echo "Intel (open-source)"
+        graphics="intel"
+        success "Detected Intel GPU"
     else
+        graphics="default"
         warn "Unknown GPU, using default drivers"
-        echo "Default (open-source)"
     fi
+    
+    echo "$graphics"
 }
 
 # Create archinstall configuration
 create_config() {
-    print_section "📝 Creating Installation Configuration"
+    print_section "📝 Creating Archinstall Configuration"
     
     # Detect graphics
     local graphics=$(detect_graphics)
-
-    # Create archinstall config
-    progress "Generating configuration file"
-    cat > /root/archinstall.json << EOF
+    progress "Creating configuration file"
+    
+    cat > "${CONFIG_DIR}/archinstall.json" << EOF
 {
     "additional-repositories": ["multilib"],
     "audio": "pipewire",
-    "bootloader": "grub",
+    "bootloader": "grub-install",
     "config_version": "2.5.1",
     "debug": false,
     "desktop-environment": null,
-    "gfx_driver": "$graphics",
-    "harddrives": [],
-    "hostname": "$HOSTNAME",
+    "gfx_driver": "${graphics}",
+    "harddrives": ["${ROOT_DISK}"],
+    "hostname": "${HOSTNAME}",
     "kernels": ["linux"],
-    "keyboard-languages": ["us", "se"],
-    "keyboard-layout": "us",
+    "keyboard-language": "us",
     "mirror-region": {
         "Sweden": {
             "http://ftp.acc.umu.se/mirror/archlinux/\$repo/os/\$arch": true,
@@ -97,53 +145,53 @@ create_config() {
     "mount_points": {
 EOF
 
-    # Add mount points from disk configuration
-    if [[ "$BOOT_CHOICE" == "yes" ]]; then
-        cat >> /root/archinstall.json << EOF
-        "/boot": {"device": "$BOOT_PART", "type": "fat32"},
+    # Add mount points based on disk configuration
+    if [ "$BOOT_CHOICE" = "yes" ]; then
+        cat >> "${CONFIG_DIR}/archinstall.json" << EOF
+        "/boot": {"device": "${BOOT_PART}", "type": "ext4"},
 EOF
     fi
 
-    cat >> /root/archinstall.json << EOF
-        "/": {"device": "$ROOT_PART", "type": "btrfs", "subvolume": "@"},
-        "/home": {"device": "$HOME_PART", "type": "btrfs"},
-        "/.snapshots": {"device": "$ROOT_PART", "type": "btrfs", "subvolume": "@snapshots"},
-        "/var/log": {"device": "$ROOT_PART", "type": "btrfs", "subvolume": "@log"},
-        "/var/cache": {"device": "$ROOT_PART", "type": "btrfs", "subvolume": "@cache"}
+    cat >> "${CONFIG_DIR}/archinstall.json" << EOF
+        "/": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@"},
+        "/home": {"device": "${HOME_PART}", "type": "btrfs"},
+        "/.snapshots": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@snapshots"},
+        "/var/log": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@log"},
+        "/var/cache": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@cache"}
     },
-    "nic": {"NetworkManager": true},
+    "nic": {"type": "NetworkManager"},
     "ntp": true,
-    "profile": {"xorg": true},
-    "root-password": "$ROOT_PASSWORD",
-    "swap": true,
+    "profile": null,
+    "services": ["NetworkManager"],
     "sys-encoding": "utf-8",
     "sys-language": "en_US",
-    "timezone": "Europe/Stockholm",
+    "timezone": "UTC",
+    "bootloader": "grub-install",
+    "swap": true,
     "users": {
-        "$USERNAME": {
+        "${USERNAME}": {
             "sudo": true,
-            "password": "$USER_PASSWORD"
+            "password": "${USER_PASSWORD}"
         }
-    },
-    "packages": ["git"]
+    }
 }
 EOF
 
-    success "Created installation configuration"
+    success "Created archinstall configuration"
 }
 
 # Run archinstall
 run_installation() {
     print_section "🚀 Running Arch Installation"
     
-    progress "Starting installation"
-    if ! archinstall --config /root/archinstall.json; then
+    progress "Starting archinstall"
+    if ! archinstall --config "${CONFIG_DIR}/archinstall.json" --disk_layouts none; then
         error "Installation failed"
     fi
-    success "Installation completed"
+    success "Installation completed successfully"
 }
 
-# Copy SSH keys to new user's home
+# Copy SSH keys if requested
 copy_ssh_to_user() {
     print_section "🔑 Setting up User SSH Keys"
     
@@ -161,12 +209,18 @@ copy_ssh_to_user() {
     fi
 }
 
-# Main function
+# Main execution
 main() {
-    print_header
+    # Load configurations
+    load_configs
+    
+    # Create archinstall config
     create_config
+    
+    # Run installation
     run_installation
     
+    # Copy SSH keys if requested
     if [[ "$COPY_SSH" =~ ^(y|yes)$ ]]; then
         copy_ssh_to_user
     fi
@@ -174,4 +228,4 @@ main() {
 
 # Run the script with error handling
 trap 'error "An error occurred. Check the output above for details."' ERR
-main
+main "$@"
