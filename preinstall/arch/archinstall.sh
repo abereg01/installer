@@ -108,7 +108,7 @@ boot_choice = os.environ['INSTALL_BOOT_CHOICE']
 config = {
     "additional-repositories": ["multilib"],
     "audio": "pipewire",
-    "bootloader": "grub-install",
+    "bootloader": "Grub",
     "config_version": "2.5.1",
     "debug": True,
     "desktop-environment": None,
