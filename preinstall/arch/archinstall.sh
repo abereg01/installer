@@ -28,55 +28,10 @@ success() { echo -e "\r${CHECK_MARK} $1"; }
 error() { echo -e "\r${CROSS_MARK} ${RED}ERROR:${NC} $1"; if [ "$2" != "no_exit" ]; then exit 1; fi; }
 warn() { echo -e "\r${YELLOW}WARNING:${NC} $1"; }
 
-# Function to print section headers
 print_section() {
     echo
     echo -e "${CYAN}${BOLD}$1${NC}"
     echo -e "${DIM}$(printf '%.s─' $(seq 1 $(tput cols)))${NC}"
-}
-
-# Function to verify root privileges
-verify_root() {
-    if [ "$EUID" -ne 0 ]; then
-        error "Please run as root"
-    fi
-}
-
-# Function to load and validate configurations
-load_configs() {
-    print_section "📋 Loading Configurations"
-    
-    # Check and load installation config
-    if [ ! -f "$INSTALL_CONFIG" ]; then
-        error "Installation configuration not found at $INSTALL_CONFIG"
-    fi
-    source "$INSTALL_CONFIG"
-    success "Loaded installation config"
-
-    # Check and load disk config
-    if [ ! -f "$DISK_CONFIG" ]; then
-        error "Disk configuration not found at $DISK_CONFIG"
-    fi
-    source "$DISK_CONFIG"
-    success "Loaded disk config"
-
-    # Verify all required variables are set
-    local required_vars=(
-        "USERNAME" "ROOT_PASSWORD" "USER_PASSWORD" "HOSTNAME"
-        "ROOT_PART" "HOME_PART" "BOOT_CHOICE"
-    )
-    
-    for var in "${required_vars[@]}"; do
-        if [ -z "${!var}" ]; then
-            error "Required variable $var is not set"
-        fi
-    done
-    
-    if [ "$BOOT_CHOICE" = "yes" ] && [ -z "$BOOT_PART" ]; then
-        error "BOOT_PART must be set when BOOT_CHOICE is yes"
-    fi
-
-    success "Configuration validation complete"
 }
 
 # Function to detect graphics hardware
@@ -89,8 +44,8 @@ detect_graphics() {
         return
     fi
     
-    local gpu_info=$(lspci | grep -i vga)
-    local graphics="default"
+    gpu_info=$(lspci | grep -i vga)
+    graphics="default"
     
     if [[ $gpu_info =~ "NVIDIA" ]]; then
         graphics="nvidia"
@@ -108,16 +63,17 @@ detect_graphics() {
     echo "$graphics"
 }
 
-# Function to create and validate archinstall configuration
+# Function to create archinstall configuration
 create_config() {
     print_section "📝 Creating Installation Configuration"
     
-    local config_file="${CONFIG_DIR}/archinstall.json"
-    local graphics=$(detect_graphics)
+    # These variables need to be inside the function
+    config_file="${CONFIG_DIR}/archinstall.json"
+    graphics=$(detect_graphics)
     
     progress "Creating configuration file"
 
-    # Export variables for Python to use
+    # Export all necessary variables for Python
     export INSTALL_GRAPHICS="$graphics"
     export INSTALL_ROOT_DISK="$ROOT_DISK"
     export INSTALL_HOSTNAME="$HOSTNAME"
@@ -127,24 +83,28 @@ create_config() {
     export INSTALL_HOME_PART="$HOME_PART"
     export INSTALL_BOOT_PART="$BOOT_PART"
     export INSTALL_BOOT_CHOICE="$BOOT_CHOICE"
+    export CONFIG_FILE="$config_file"
 
-    # Create configuration using Python with environment variables
+    # Create the configuration using Python
     python3 - << 'EOF'
 import json
 import os
 
-# Get variables from environment
-graphics = os.environ.get('INSTALL_GRAPHICS', 'default')
-root_disk = os.environ.get('INSTALL_ROOT_DISK')
-hostname = os.environ.get('INSTALL_HOSTNAME')
-username = os.environ.get('INSTALL_USERNAME')
-password = os.environ.get('INSTALL_PASSWORD')
-root_part = os.environ.get('INSTALL_ROOT_PART')
-home_part = os.environ.get('INSTALL_HOME_PART')
-boot_part = os.environ.get('INSTALL_BOOT_PART')
-boot_choice = os.environ.get('INSTALL_BOOT_CHOICE')
+# Get the configuration file path from environment
+config_file = os.environ['CONFIG_FILE']
 
-# Create the base configuration
+# Get installation variables from environment
+graphics = os.environ['INSTALL_GRAPHICS']
+root_disk = os.environ['INSTALL_ROOT_DISK']
+hostname = os.environ['INSTALL_HOSTNAME']
+username = os.environ['INSTALL_USERNAME']
+password = os.environ['INSTALL_PASSWORD']
+root_part = os.environ['INSTALL_ROOT_PART']
+home_part = os.environ['INSTALL_HOME_PART']
+boot_part = os.environ['INSTALL_BOOT_PART']
+boot_choice = os.environ['INSTALL_BOOT_CHOICE']
+
+# Create the configuration dictionary
 config = {
     "additional-repositories": ["multilib"],
     "audio": "pipewire",
@@ -206,128 +166,30 @@ config = {
 if boot_choice == "yes":
     config["mount_points"]["/boot"] = {"device": boot_part, "type": "ext4"}
 
-# Write configuration to file
-with open("/root/archinstall.json", "w") as f:
+# Ensure the directory exists
+os.makedirs(os.path.dirname(config_file), exist_ok=True)
+
+# Write the configuration to file
+with open(config_file, "w") as f:
     json.dump(config, f, indent=4)
 
-print("Configuration created successfully!")
+print(f"Configuration written to {config_file}")
 EOF
 
     if [ $? -ne 0 ]; then
         error "Failed to create configuration file"
     fi
 
-    # Verify the configuration file exists and has content
     if [ ! -s "$config_file" ]; then
         error "Configuration file is empty or missing"
     fi
     
     success "Created installation configuration"
     
-    # Display configuration preview (excluding sensitive data)
+    # Show preview of configuration (excluding sensitive data)
     echo -e "\n${CYAN}Configuration Preview (sensitive data hidden):${NC}"
     grep -v "password" "$config_file" || true
     echo
-}
-    print_section "📝 Creating Installation Configuration"
-    
-    local config_file="${CONFIG_DIR}/archinstall.json"
-    local graphics=$(detect_graphics)
-    
-    progress "Creating configuration file"
-
-    # Use Python to generate valid JSON configuration
-    python3 - << EOF
-import json
-
-# Build the configuration dictionary
-config = {
-    "additional-repositories": ["multilib"],
-    "audio": "pipewire",
-    "bootloader": "grub-install",
-    "config_version": "2.5.1",
-    "debug": True,
-    "desktop-environment": None,
-    "gfx_driver": "${graphics}",
-    "harddrives": ["${ROOT_DISK}"],
-    "hostname": "${HOSTNAME}",
-    "kernels": ["linux"],
-    "keyboard-language": "us",
-    "mirror-region": {
-        "Sweden": {
-            "https://ftp.acc.umu.se/mirror/archlinux/\$repo/os/\$arch": True,
-            "https://ftp.lysator.liu.se/pub/archlinux/\$repo/os/\$arch": True,
-            "https://ftp.myrveln.se/pub/linux/archlinux/\$repo/os/\$arch": True
-        }
-    },
-    "mount_points": {
-        "/": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@"},
-        "/home": {"device": "${HOME_PART}", "type": "btrfs"},
-        "/.snapshots": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@snapshots"},
-        "/var/log": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@log"},
-        "/var/cache": {"device": "${ROOT_PART}", "type": "btrfs", "subvolume": "@cache"}
-    },
-    "nic": {"type": "NetworkManager"},
-    "ntp": True,
-    "profile": None,
-    "packages": [
-        "git",
-        "vim",
-        "sudo",
-        "networkmanager",
-        "base-devel",
-        "linux-headers"
-    ],
-    "services": ["NetworkManager", "sshd"],
-    "sys-encoding": "utf-8",
-    "sys-language": "en_US",
-    "timezone": "Europe/Stockholm",
-    "swap": True,
-    "users": {
-        "${USERNAME}": {
-            "sudo": True,
-            "password": "${USER_PASSWORD}",
-            "shell": "/bin/bash"
-        }
-    },
-    "custom-commands": [
-        "chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}",
-        "systemctl enable NetworkManager",
-        "systemctl enable sshd",
-        "pacman -Sy --noconfirm archlinux-keyring"
-    ]
-}
-
-# Add boot partition if specified
-if "${BOOT_CHOICE}" == "yes":
-    config["mount_points"]["/boot"] = {"device": "${BOOT_PART}", "type": "ext4"}
-
-# Write the configuration to file with proper formatting
-with open("${config_file}", "w") as f:
-    json.dump(config, f, indent=4)
-
-# Validate the JSON
-with open("${config_file}", "r") as f:
-    json.load(f)
-
-print("Configuration successfully created and validated")
-EOF
-
-    if [ $? -ne 0 ]; then
-        error "Failed to create configuration file"
-    fi
-    
-    success "Created and verified installation configuration"
-    
-    # Display configuration preview (excluding sensitive data)
-    echo -e "\n${CYAN}Configuration Preview (sensitive data hidden):${NC}"
-    grep -v "password" "$config_file" || true
-    echo
-
-    # Verify the configuration file exists and has content
-    if [ ! -s "$config_file" ]; then
-        error "Configuration file is empty or missing"
-    fi
 }
 
 # Function to run the actual installation
@@ -341,12 +203,12 @@ run_installation() {
     success "Installation completed"
 }
 
-# Function to copy SSH keys to the new user
+# Function to copy SSH keys
 copy_ssh_to_user() {
     print_section "🔑 Setting up User SSH Keys"
     
     if [ -d "/root/.ssh" ]; then
-        local user_home="/mnt/home/$USERNAME"
+        user_home="/mnt/home/$USERNAME"
         progress "Copying SSH keys to $USERNAME"
         mkdir -p "$user_home/.ssh"
         cp -r /root/.ssh/* "$user_home/.ssh/"
@@ -359,9 +221,12 @@ copy_ssh_to_user() {
     fi
 }
 
-# Main execution function
+# Main function
 main() {
-    verify_root
+    if [ "$EUID" -ne 0 ]; then
+        error "Please run as root"
+    fi
+
     load_configs
     create_config
     run_installation
