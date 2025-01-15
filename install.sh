@@ -124,27 +124,78 @@ verify_ssh() {
 mount_usb_and_copy_ssh() {
     print_section "🔑 Setting up SSH Keys"
     
-    progress "Detecting SSH keys"
-    local ssh_dirs=(
+    progress "Looking for installation media"
+    
+    # First, try to find the installation media
+    local media_mount="/run/archiso/bootmnt"
+    if [ ! -d "$media_mount" ]; then
+        # Try to find and mount the USB device
+        local usb_device=$(lsblk -rpo "name,type,mountpoint" | grep 'part' | awk '$3=="" {print $1}' | head -n 1)
+        if [ -n "$usb_device" ]; then
+            progress "Found potential USB device: $usb_device"
+            mkdir -p "$media_mount"
+            if ! mount "$usb_device" "$media_mount"; then
+                warn "Could not mount USB device"
+            fi
+        fi
+    fi
+
+    # Check possible SSH key locations
+    local ssh_locations=(
         "/root/.ssh"
-        "/run/archiso/bootmnt/secure/.ssh"
-        "/run/archiso/bootmnt/.ssh"
+        "$media_mount/secure/.ssh"
+        "$media_mount/.ssh"
     )
 
-    for ssh_dir in "${ssh_dirs[@]}"; do
-        if [ -d "$ssh_dir" ]; then
-            progress "Found SSH keys in $ssh_dir"
+    for location in "${ssh_locations[@]}"; do
+        progress "Checking for SSH keys in $location"
+        if [ -d "$location" ] && [ -n "$(ls -A "$location" 2>/dev/null)" ]; then
+            progress "Found SSH keys in $location"
             mkdir -p /root/.ssh
-            cp -r "$ssh_dir/"* /root/.ssh/
+            cp -r "$location/"* /root/.ssh/ 2>/dev/null
             chmod 700 /root/.ssh
-            chmod 600 /root/.ssh/*
+            chmod 600 /root/.ssh/* 2>/dev/null
             success "SSH keys configured"
             return 0
         fi
     done
 
-    warn "No SSH keys found"
-    return 1
+    # If no keys found, offer to generate new ones
+    echo
+    echo -e "${YELLOW}No existing SSH keys found. Would you like to:${NC}"
+    echo "1) Generate new SSH keys"
+    echo "2) Skip SSH key setup"
+    read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Choose an option [1-2]: ")" ssh_choice
+    
+    case "$ssh_choice" in
+        1)
+            progress "Generating new SSH key"
+            mkdir -p /root/.ssh
+            ssh-keygen -t ed25519 -C "arch_install_$(date +%Y%m%d)" -f /root/.ssh/id_ed25519 -N ""
+            chmod 700 /root/.ssh
+            chmod 600 /root/.ssh/*
+            
+            # Display the public key
+            echo
+            echo -e "${YELLOW}Here is your public SSH key:${NC}"
+            cat /root/.ssh/id_ed25519.pub
+            echo
+            echo -e "${YELLOW}Add this key to your GitHub account before continuing.${NC}"
+            echo -e "${YELLOW}Visit: https://github.com/settings/keys${NC}"
+            echo
+            read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Press Enter when ready to continue...")"
+            success "SSH key generated"
+            return 0
+            ;;
+        2)
+            warn "Skipping SSH key setup"
+            return 1
+            ;;
+        *)
+            warn "Invalid option. Skipping SSH key setup"
+            return 1
+            ;;
+    esac
 }
 
 # Function to gather user input
@@ -225,7 +276,13 @@ main() {
         # Gather user input and handle SSH
         gather_user_input
         if [[ "$COPY_SSH" =~ ^(y|yes)$ ]]; then
-            mount_usb_and_copy_ssh && verify_ssh
+            if mount_usb_and_copy_ssh; then
+                if ! verify_ssh; then
+                    warn "SSH verification failed. Installation will continue, but you may want to check your SSH setup later."
+                fi
+            else
+                warn "SSH key setup skipped. Installation will continue without SSH configuration."
+            fi
         fi
         
         # Run BTRFS setup
