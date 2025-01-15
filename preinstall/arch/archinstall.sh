@@ -3,18 +3,23 @@
 # Script version
 VERSION="1.0.0"
 
-# Default path for configs
+# Default paths
 CONFIG_DIR="/root"
 INSTALL_CONFIG="${CONFIG_DIR}/install_config"
 DISK_CONFIG="${CONFIG_DIR}/disk_config.txt"
 
-# Source styling directly instead of trying to locate install.sh
+# Colors and styling
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 BOLD='\033[1m'
+DIM='\033[2m'
+ITALIC='\033[3m'
 NC='\033[0m'
+
+# Unicode symbols
 CHECK_MARK="\033[0;32m✓\033[0m"
 CROSS_MARK="\033[0;31m✗\033[0m"
 ARROW="→"
@@ -45,16 +50,35 @@ print_section() {
     echo -e "${DIM}$(printf '%.s─' $(seq 1 $(tput cols)))${NC}"
 }
 
-# Load configurations
+# Function to verify environment
+verify_environment() {
+    print_section "🔍 Verifying Environment"
+
+    # Check if running from Arch ISO
+    if [ ! -f /etc/arch-release ]; then
+        error "This script must be run from Arch installation media"
+    fi
+
+    # Check if root
+    if [ "$EUID" -ne 0 ]; then
+        error "Please run as root"
+    }
+
+    success "Environment verified"
+}
+
+# Function to load configurations
 load_configs() {
     print_section "📋 Loading Configurations"
     
+    # Load installation config
     if [ ! -f "$INSTALL_CONFIG" ]; then
         error "Installation configuration not found at $INSTALL_CONFIG"
     fi
     source "$INSTALL_CONFIG"
     success "Loaded installation config"
 
+    # Load disk config
     if [ ! -f "$DISK_CONFIG" ]; then
         error "Disk configuration not found at $DISK_CONFIG"
     fi
@@ -76,9 +100,11 @@ load_configs() {
     if [ "$BOOT_CHOICE" = "yes" ] && [ -z "$BOOT_PART" ]; then
         error "BOOT_PART must be set when BOOT_CHOICE is yes"
     fi
+
+    success "All required variables verified"
 }
 
-# Detect graphics hardware
+# Function to detect graphics
 detect_graphics() {
     print_section "🔍 Detecting Graphics Hardware"
     
@@ -92,6 +118,7 @@ detect_graphics() {
     
     # Hardware detection
     local gpu_info=$(lspci | grep -i vga)
+    progress "Detected GPU: $gpu_info"
     local graphics=""
     
     if [[ $gpu_info =~ "NVIDIA" ]]; then
@@ -111,9 +138,29 @@ detect_graphics() {
     echo "$graphics"
 }
 
-# Create archinstall configuration
+# Function to validate user configuration
+validate_user_config() {
+    print_section "🔍 Validating User Configuration"
+    
+    # Check if required variables exist
+    if [ -z "$USERNAME" ] || [ -z "$USER_PASSWORD" ]; then
+        error "Username or password not set in configuration"
+    fi
+    
+    # Validate username format
+    if ! [[ "$USERNAME" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+        error "Invalid username format: $USERNAME"
+    fi
+    
+    success "User configuration validated"
+}
+
+# Function to create archinstall configuration
 create_config() {
     print_section "📝 Creating Archinstall Configuration"
+    
+    # Validate user configuration first
+    validate_user_config
     
     # Detect graphics
     local graphics=$(detect_graphics)
@@ -125,7 +172,7 @@ create_config() {
     "audio": "pipewire",
     "bootloader": "grub-install",
     "config_version": "2.5.1",
-    "debug": false,
+    "debug": true,
     "desktop-environment": null,
     "gfx_driver": "${graphics}",
     "harddrives": ["${ROOT_DISK}"],
@@ -162,25 +209,40 @@ EOF
     "nic": {"type": "NetworkManager"},
     "ntp": true,
     "profile": null,
+    "packages": ["git", "vim", "sudo", "networkmanager"],
     "services": ["NetworkManager"],
     "sys-encoding": "utf-8",
     "sys-language": "en_US",
-    "timezone": "UTC",
+    "timezone": "Europe/Stockholm",
     "bootloader": "grub-install",
     "swap": true,
     "users": {
         "${USERNAME}": {
             "sudo": true,
-            "password": "${USER_PASSWORD}"
+            "password": "${USER_PASSWORD}",
+            "shell": "/bin/bash"
         }
-    }
+    },
+    "custom-commands": [
+        "chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}",
+        "systemctl enable NetworkManager",
+        "systemctl enable sshd"
+    ]
 }
 EOF
 
     success "Created archinstall configuration"
+    
+    # Debug output
+    progress "Verifying configuration file"
+    if [ -f "${CONFIG_DIR}/archinstall.json" ]; then
+        success "Configuration file created successfully"
+    else
+        error "Failed to create configuration file"
+    fi
 }
 
-# Run archinstall
+# Function to run archinstall
 run_installation() {
     print_section "🚀 Running Arch Installation"
     
@@ -191,7 +253,7 @@ run_installation() {
     success "Installation completed successfully"
 }
 
-# Copy SSH keys if requested
+# Function to copy SSH keys
 copy_ssh_to_user() {
     print_section "🔑 Setting up User SSH Keys"
     
@@ -209,18 +271,13 @@ copy_ssh_to_user() {
     fi
 }
 
-# Main execution
+# Main function
 main() {
-    # Load configurations
+    verify_environment
     load_configs
-    
-    # Create archinstall config
     create_config
-    
-    # Run installation
     run_installation
     
-    # Copy SSH keys if requested
     if [[ "$COPY_SSH" =~ ^(y|yes)$ ]]; then
         copy_ssh_to_user
     fi
