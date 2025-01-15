@@ -50,42 +50,16 @@ print_section() {
     echo -e "${DIM}$(printf '%.s─' $(seq 1 $(tput cols)))${NC}"
 }
 
-# Function to verify environment
-verify_environment() {
-    print_section "🔍 Verifying Environment"
-
-    # Check if root
-    if [ "$EUID" -ne 0 ]; then
-        error "Please run as root"
-    fi
-
-    # Check for Arch installation media
-    # We check both archiso-release and arch-release
-    # Also verify we're not on an installed system by checking for /etc/hostname
-    if [ ! -f /etc/arch-release ] || [ -f /etc/hostname ]; then
-        error "This script must be run from Arch installation media"
-    fi
-
-    # Additional check for live environment
-    if [ -f /etc/hostname ]; then
-        error "This script must be run from the live environment, not an installed system"
-    fi
-
-    success "Environment verified"
-}
-
 # Function to load configurations
 load_configs() {
     print_section "📋 Loading Configurations"
     
-    # Load installation config
     if [ ! -f "$INSTALL_CONFIG" ]; then
         error "Installation configuration not found at $INSTALL_CONFIG"
     fi
     source "$INSTALL_CONFIG"
     success "Loaded installation config"
 
-    # Load disk config
     if [ ! -f "$DISK_CONFIG" ]; then
         error "Disk configuration not found at $DISK_CONFIG"
     fi
@@ -115,28 +89,26 @@ load_configs() {
 detect_graphics() {
     print_section "🔍 Detecting Graphics Hardware"
     
-    # VM Detection
     if systemd-detect-virt --vm &>/dev/null; then
         local graphics="vmware"
-        success "Detected VM environment, using vmware drivers"
+        success "Detected VM environment"
         echo "$graphics"
         return
     fi
     
-    # Hardware detection
     local gpu_info=$(lspci | grep -i vga)
     progress "Detected GPU: $gpu_info"
     local graphics=""
     
     if [[ $gpu_info =~ "NVIDIA" ]]; then
         graphics="nvidia"
-        success "Detected NVIDIA GPU"
+        success "NVIDIA GPU detected"
     elif [[ $gpu_info =~ "AMD" ]] || [[ $gpu_info =~ "ATI" ]]; then
         graphics="amd"
-        success "Detected AMD GPU"
+        success "AMD GPU detected"
     elif [[ $gpu_info =~ "Intel" ]]; then
         graphics="intel"
-        success "Detected Intel GPU"
+        success "Intel GPU detected"
     else
         graphics="default"
         warn "Unknown GPU, using default drivers"
@@ -145,31 +117,10 @@ detect_graphics() {
     echo "$graphics"
 }
 
-# Function to validate user configuration
-validate_user_config() {
-    print_section "🔍 Validating User Configuration"
-    
-    # Check if required variables exist
-    if [ -z "$USERNAME" ] || [ -z "$USER_PASSWORD" ]; then
-        error "Username or password not set in configuration"
-    fi
-    
-    # Validate username format
-    if ! [[ "$USERNAME" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
-        error "Invalid username format: $USERNAME"
-    fi
-    
-    success "User configuration validated"
-}
-
 # Function to create archinstall configuration
 create_config() {
     print_section "📝 Creating Archinstall Configuration"
     
-    # Validate user configuration first
-    validate_user_config
-    
-    # Detect graphics
     local graphics=$(detect_graphics)
     progress "Creating configuration file"
     
@@ -239,14 +190,6 @@ EOF
 EOF
 
     success "Created archinstall configuration"
-    
-    # Debug output
-    progress "Verifying configuration file"
-    if [ -f "${CONFIG_DIR}/archinstall.json" ]; then
-        success "Configuration file created successfully"
-    else
-        error "Failed to create configuration file"
-    fi
 }
 
 # Function to run archinstall
@@ -282,20 +225,12 @@ copy_ssh_to_user() {
 main() {
     print_section "🚀 Starting Arch Installation"
     
-    # Basic environment check
+    # Check if we're root
     if [ "$EUID" -ne 0 ]; then
         error "Please run as root"
     fi
 
-    # Check if we're in the live environment
-    if [ -f /etc/arch-release ] && [ ! -f /etc/hostname ]; then
-        progress "Running in Arch installation environment"
-        success "Environment check passed"
-    else
-        error "This script must be run from Arch installation media"
-    fi
-
-    # Load configurations and proceed with installation
+    # Load configurations and proceed
     load_configs
     create_config
     run_installation
@@ -305,9 +240,5 @@ main() {
     fi
 }
 
-# Ensure we're in the correct path
-cd "$(dirname "$0")" || error "Failed to change to script directory"
-
-# Run the script with error handling
-trap 'error "An error occurred. Check the output above for details."' ERR
+# Run the script
 main "$@"
