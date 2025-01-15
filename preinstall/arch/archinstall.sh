@@ -54,14 +54,21 @@ print_section() {
 verify_environment() {
     print_section "🔍 Verifying Environment"
 
-    # Check if running from Arch ISO and not an installed system
+    # Check if root
+    if [ "$EUID" -ne 0 ]; then
+        error "Please run as root"
+    fi
+
+    # Check for Arch installation media
+    # We check both archiso-release and arch-release
+    # Also verify we're not on an installed system by checking for /etc/hostname
     if [ ! -f /etc/arch-release ] || [ -f /etc/hostname ]; then
         error "This script must be run from Arch installation media"
     fi
 
-    # Check if root
-    if [ "$EUID" -ne 0 ]; then
-        error "Please run as root"
+    # Additional check for live environment
+    if [ -f /etc/hostname ]; then
+        error "This script must be run from the live environment, not an installed system"
     fi
 
     success "Environment verified"
@@ -273,7 +280,22 @@ copy_ssh_to_user() {
 
 # Main function
 main() {
-    verify_environment
+    print_section "🚀 Starting Arch Installation"
+    
+    # Basic environment check
+    if [ "$EUID" -ne 0 ]; then
+        error "Please run as root"
+    fi
+
+    # Check if we're in the live environment
+    if [ -f /etc/arch-release ] && [ ! -f /etc/hostname ]; then
+        progress "Running in Arch installation environment"
+        success "Environment check passed"
+    else
+        error "This script must be run from Arch installation media"
+    fi
+
+    # Load configurations and proceed with installation
     load_configs
     create_config
     run_installation
@@ -282,6 +304,9 @@ main() {
         copy_ssh_to_user
     fi
 }
+
+# Ensure we're in the correct path
+cd "$(dirname "$0")" || error "Failed to change to script directory"
 
 # Run the script with error handling
 trap 'error "An error occurred. Check the output above for details."' ERR
