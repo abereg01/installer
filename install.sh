@@ -288,10 +288,35 @@ main() {
         # Run BTRFS setup
         BTRFS_SCRIPT="$SCRIPT_DIR/preinstall/arch/btrfs.sh"
         if [ -f "$BTRFS_SCRIPT" ]; then
+            print_section "💽 Running BTRFS Setup"
             progress "Running BTRFS setup"
             chmod +x "$BTRFS_SCRIPT"
-            "$BTRFS_SCRIPT" || error "BTRFS setup failed"
-            success "BTRFS setup completed"
+            
+            # Run BTRFS setup
+            if ! "$BTRFS_SCRIPT"; then
+                error "BTRFS setup failed"
+            fi
+            
+            # Verify BTRFS setup created necessary configurations
+            progress "Verifying BTRFS configuration"
+            if [ ! -f "/root/disk_config.txt" ]; then
+                error "BTRFS setup did not create disk configuration"
+            fi
+            
+            # Display disk configuration for verification
+            echo -e "\n${CYAN}Disk Configuration:${NC}"
+            cat "/root/disk_config.txt"
+            echo
+            
+            read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Does this disk configuration look correct? [Y/n]: ")" confirm
+            case "${confirm,,}" in
+                ""|y|yes)
+                    success "BTRFS setup completed"
+                    ;;
+                *)
+                    error "Installation aborted by user"
+                    ;;
+            esac
         else
             error "BTRFS script not found at: $BTRFS_SCRIPT"
         fi
@@ -299,10 +324,38 @@ main() {
         # Run archinstall
         ARCHINSTALL_SCRIPT="$SCRIPT_DIR/preinstall/arch/archinstall.sh"
         if [ -f "$ARCHINSTALL_SCRIPT" ]; then
-            progress "Running Arch installation"
-            chmod +x "$ARCHINSTALL_SCRIPT"
-            "$ARCHINSTALL_SCRIPT" || error "Arch installation failed"
-            success "Arch installation completed"
+            print_section "🚀 Running Arch Installation"
+            
+            # Verify all required configurations exist
+            progress "Verifying configurations"
+            if [ ! -f "/root/install_config" ]; then
+                error "User configuration file missing"
+            fi
+            if [ ! -f "/root/disk_config.txt" ]; then
+                error "Disk configuration file missing"
+            fi
+            
+            # Display configurations for verification
+            echo -e "\n${CYAN}Installation Configuration:${NC}"
+            grep -v "PASSWORD" "/root/install_config" || true
+            echo -e "\n${CYAN}Disk Configuration:${NC}"
+            cat "/root/disk_config.txt"
+            echo
+            
+            read -p "$(echo -e "${BOLD}${BLUE}$ARROW${NC} Ready to proceed with installation? [Y/n]: ")" proceed
+            case "${proceed,,}" in
+                ""|y|yes)
+                    chmod +x "$ARCHINSTALL_SCRIPT"
+                    progress "Running Arch installation"
+                    if ! "$ARCHINSTALL_SCRIPT"; then
+                        error "Arch installation failed"
+                    fi
+                    success "Arch installation completed"
+                    ;;
+                *)
+                    error "Installation aborted by user"
+                    ;;
+            esac
             
             # Ask about reboot
             echo
