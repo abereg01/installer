@@ -125,6 +125,78 @@ config = {
     "additional-repositories": ["multilib"],
     "audio": "Pipewire",
     "bootloader": "Grub",
+    "config_version": "2.7.1",
+    "debug": True,
+    "desktop-environment": None,
+    "gfx_driver": graphics,
+    "harddrives": [root_disk],
+    "hostname": hostname,
+    "kernels": ["linux"],
+    "keyboard-language": "us",
+    "mirror-region": {
+        "Sweden": {
+            "https://ftp.acc.umu.se/mirror/archlinux/\$repo/os/\$arch": True,
+            "https://ftp.lysator.liu.se/pub/archlinux/\$repo/os/\$arch": True,
+            "https://ftp.myrveln.se/pub/linux/archlinux/\$repo/os/\$arch": True
+        }
+    },
+    "disk_config": {
+        "device": root_disk,
+        "partitions": [
+            {
+                "type": "primary",
+                "boot": True,
+                "filesystem": {
+                    "format": "btrfs",
+                    "mount_point": "/",
+                    "options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@"]
+                }
+            }
+        ],
+        "hooks": ["base", "udev", "autodetect", "modconf", "block", "filesystems", "keyboard", "fsck"]
+    },
+    "mount_points": {
+        "/": {"device": root_part, "type": "btrfs", "subvolume": "@"},
+        "/home": {"device": home_part, "type": "btrfs"},
+        "/.snapshots": {"device": root_part, "type": "btrfs", "subvolume": "@snapshots"},
+        "/var/log": {"device": root_part, "type": "btrfs", "subvolume": "@log"},
+        "/var/cache": {"device": root_part, "type": "btrfs", "subvolume": "@cache"}
+    },
+    "network": {
+        "type": "nm"
+    },
+    "ntp": True,
+    "packages": [
+        "git",
+        "vim",
+        "sudo",
+        "networkmanager",
+        "base-devel",
+        "linux-headers"
+    ],
+    "services": ["NetworkManager", "sshd"],
+    "sys-encoding": "utf-8",
+    "sys-language": "en_US",
+    "timezone": "Europe/Stockholm",
+    "swap": True,
+    "root-password": root_password,
+    "users": {
+        username: {
+            "sudo": True,
+            "password": password,
+            "shell": "/bin/bash"
+        }
+    },
+    "custom-commands": [
+        f"chown -R {username}:{username} /home/{username}",
+        "systemctl enable NetworkManager",
+        "systemctl enable sshd",
+        "pacman -Sy --noconfirm archlinux-keyring"
+    ]
+}
+    "additional-repositories": ["multilib"],
+    "audio": "Pipewire",
+    "bootloader": "Grub",
     "config_version": "2.5.1",
     "debug": True,
     "desktop-environment": None,
@@ -262,8 +334,10 @@ run_installation() {
     if ! archinstall \
         --config "${CONFIG_DIR}/archinstall.json" \
         --silent \
-        --no-modify-bootloader; then
+        --no-progress \
+        --debug; then
         error "Installation failed"
+        echo "Check /var/log/archinstall/install.log for details"
     fi
     success "Installation completed"
 }
