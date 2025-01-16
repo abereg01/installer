@@ -82,12 +82,12 @@ detect_graphics() {
     echo "$graphics"
 }
 
-# Create configuration
+# Create and validate archinstall configuration
 create_config() {
     print_section "📝 Creating Installation Configuration"
     
-    local config_file="${CONFIG_DIR}/archinstall.json"
-    local graphics=$(detect_graphics)
+    config_file="${CONFIG_DIR}/archinstall.json"
+    graphics=$(detect_graphics)
     
     progress "Creating configuration file"
 
@@ -104,7 +104,7 @@ create_config() {
     export INSTALL_BOOT_CHOICE="$BOOT_CHOICE"
     export CONFIG_FILE="$config_file"
 
-    python3 << "EndOfPython"
+python3 << EOF
 import json
 import os
 
@@ -122,194 +122,85 @@ boot_choice = os.environ['INSTALL_BOOT_CHOICE']
 config_file = os.environ['CONFIG_FILE']
 
 config = {
-    "additional-repositories": ["multilib"],
-    "audio": "Pipewire",
-    "bootloader": "Grub",
-    "config_version": "2.7.1",
-    "debug": True,
-    "desktop-environment": None,
-    "gfx_driver": graphics,
-    "harddrives": [root_disk],
-    "hostname": hostname,
-    "kernels": ["linux"],
-    "keyboard-language": "us",
-    "mirror-region": {
-        "Sweden": {
-            "https://ftp.acc.umu.se/mirror/archlinux/\$repo/os/\$arch": True,
-            "https://ftp.lysator.liu.se/pub/archlinux/\$repo/os/\$arch": True,
-            "https://ftp.myrveln.se/pub/linux/archlinux/\$repo/os/\$arch": True
-        }
-    },
-    "disk_config": {
-        "device": root_disk,
-        "partitions": [
-            {
-                "type": "primary",
-                "boot": True,
-                "filesystem": {
-                    "format": "btrfs",
-                    "mount_point": "/",
-                    "options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@"]
-                }
+"additional-repositories": ["multilib"],
+"audio": "Pipewire",
+"bootloader": "Grub",
+"config_version": "2.7.1",
+"debug": True,
+"desktop-environment": None,
+"gfx_driver": graphics,
+"harddrives": [root_disk],
+"hostname": hostname,
+"kernels": ["linux"],
+"keyboard-language": "us",
+"mirror-region": {
+    "Sweden": {
+        "https://ftp.acc.umu.se/mirror/archlinux/\$repo/os/\$arch": True,
+        "https://ftp.lysator.liu.se/pub/archlinux/\$repo/os/\$arch": True,
+        "https://ftp.myrveln.se/pub/linux/archlinux/\$repo/os/\$arch": True
+    }
+},
+"disk_config": {
+    "device": root_disk,
+    "partitions": [
+        {
+            "type": "primary",
+            "boot": True,
+            "filesystem": {
+                "format": "btrfs",
+                "mount_point": "/",
+                "options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@"]
             }
-        ],
-        "hooks": ["base", "udev", "autodetect", "modconf", "block", "filesystems", "keyboard", "fsck"]
-    },
-    "mount_points": {
-        "/": {"device": root_part, "type": "btrfs", "subvolume": "@"},
-        "/home": {"device": home_part, "type": "btrfs"},
-        "/.snapshots": {"device": root_part, "type": "btrfs", "subvolume": "@snapshots"},
-        "/var/log": {"device": root_part, "type": "btrfs", "subvolume": "@log"},
-        "/var/cache": {"device": root_part, "type": "btrfs", "subvolume": "@cache"}
-    },
-    "network": {
-        "type": "nm"
-    },
-    "ntp": True,
-    "packages": [
-        "git",
-        "vim",
-        "sudo",
-        "networkmanager",
-        "base-devel",
-        "linux-headers"
+        }
     ],
-    "services": ["NetworkManager", "sshd"],
-    "sys-encoding": "utf-8",
-    "sys-language": "en_US",
-    "timezone": "Europe/Stockholm",
-    "swap": True,
-    "root-password": root_password,
-    "users": {
-        username: {
-            "sudo": True,
-            "password": password,
-            "shell": "/bin/bash"
-        }
-    },
-    "custom-commands": [
-        f"chown -R {username}:{username} /home/{username}",
-        "systemctl enable NetworkManager",
-        "systemctl enable sshd",
-        "pacman -Sy --noconfirm archlinux-keyring"
-    ]
-}
-    "additional-repositories": ["multilib"],
-    "audio": "Pipewire",
-    "bootloader": "Grub",
-    "config_version": "2.5.1",
-    "debug": True,
-    "desktop-environment": None,
-    "gfx_driver": graphics,
-    "harddrives": [root_disk],
-    "hostname": hostname,
-    "kernels": ["linux"],
-    "keyboard-language": "us",
-    "mirror-region": {
-        "Sweden": {
-            "https://ftp.acc.umu.se/mirror/archlinux/\$repo/os/\$arch": True,
-            "https://ftp.lysator.liu.se/pub/archlinux/\$repo/os/\$arch": True,
-            "https://ftp.myrveln.se/pub/linux/archlinux/\$repo/os/\$arch": True
-        }
-    },
-    "disk": {
-        "device": root_disk,
-        "type": "manual",
-        "partitions": [
-            {
-                "mountpoint": "/",
-                "type": "btrfs",
-                "start": "0%",
-                "size": "100%",
-                "device": root_part,
-                "wipe": False,
-                "mount_options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@"]
-            },
-            {
-                "mountpoint": "/home",
-                "type": "btrfs",
-                "device": home_part,
-                "wipe": False,
-                "mount_options": ["compress=zstd", "space_cache=v2", "noatime"]
-            },
-            {
-                "mountpoint": "/.snapshots",
-                "type": "btrfs",
-                "device": root_part,
-                "wipe": False,
-                "mount_options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@snapshots"]
-            },
-            {
-                "mountpoint": "/var/log",
-                "type": "btrfs",
-                "device": root_part,
-                "wipe": False,
-                "mount_options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@log"]
-            },
-            {
-                "mountpoint": "/var/cache",
-                "type": "btrfs",
-                "device": root_part,
-                "wipe": False,
-                "mount_options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@cache"]
-            }
-        ]
-    },
-    "mount_points": {
-        "/": {"device": root_part, "type": "btrfs", "subvolume": "@"},
-        "/home": {"device": home_part, "type": "btrfs"},
-        "/.snapshots": {"device": root_part, "type": "btrfs", "subvolume": "@snapshots"},
-        "/var/log": {"device": root_part, "type": "btrfs", "subvolume": "@log"},
-        "/var/cache": {"device": root_part, "type": "btrfs", "subvolume": "@cache"}
-    },
-    "network": {
-        "type": "NetworkManager",
-        "config_type": "nm"
-    },
-    "ntp": True,
-    "profile": None,
-    "packages": [
-        "git",
-        "vim",
-        "sudo",
-        "networkmanager",
-        "base-devel",
-        "linux-headers"
-    ],
-    "services": ["NetworkManager", "sshd"],
-    "sys-encoding": "utf-8",
-    "sys-language": "en_US",
-    "timezone": "Europe/Stockholm",
-    "swap": True,
-    "root-password": root_password,
-    "superusers": {
-        username: {
-            "password": password
-        }
-    },
-    "users": {
-        username: {
-            "sudo": True,
-            "password": password,
-            "shell": "/bin/bash"
-        }
-    },
-    "custom-commands": [
-        f"chown -R {username}:{username} /home/{username}",
-        "systemctl enable NetworkManager",
-        "systemctl enable sshd",
-        "pacman -Sy --noconfirm archlinux-keyring"
-    ]
+    "hooks": ["base", "udev", "autodetect", "modconf", "block", "filesystems", "keyboard", "fsck"]
+},
+"mount_points": {
+    "/": {"device": root_part, "type": "btrfs", "subvolume": "@"},
+    "/home": {"device": home_part, "type": "btrfs"},
+    "/.snapshots": {"device": root_part, "type": "btrfs", "subvolume": "@snapshots"},
+    "/var/log": {"device": root_part, "type": "btrfs", "subvolume": "@log"},
+    "/var/cache": {"device": root_part, "type": "btrfs", "subvolume": "@cache"}
+},
+"network": {
+    "type": "nm"
+},
+"ntp": True,
+"packages": [
+    "git",
+    "vim",
+    "sudo",
+    "networkmanager",
+    "base-devel",
+    "linux-headers"
+],
+"services": ["NetworkManager", "sshd"],
+"sys-encoding": "utf-8",
+"sys-language": "en_US",
+"timezone": "Europe/Stockholm",
+"swap": True,
+"root-password": root_password,
+"users": {
+    username: {
+        "sudo": True,
+        "password": password,
+        "shell": "/bin/bash"
+    }
+},
+"custom-commands": [
+    f"chown -R {username}:{username} /home/{username}",
+    "systemctl enable NetworkManager",
+    "systemctl enable sshd",
+    "pacman -Sy --noconfirm archlinux-keyring"
+]
 }
 
-if boot_choice == "yes":
-    config["mount_points"]["/boot"] = {"device": boot_part, "type": "ext4"}
-
+# Write configuration to file
 with open(config_file, "w") as f:
     json.dump(config, f, indent=4)
 
 print(f"Configuration written to {config_file}")
-EndOfPython
+EOF
 
     if [ $? -ne 0 ]; then
         error "Failed to create configuration file"
@@ -321,6 +212,7 @@ EndOfPython
     
     success "Created installation configuration"
     
+    # Show preview of configuration (excluding sensitive data)
     echo -e "\n${CYAN}Configuration Preview (sensitive data hidden):${NC}"
     grep -v "password" "$config_file" || true
     echo
@@ -342,7 +234,7 @@ run_installation() {
     success "Installation completed"
 }
 
-# Copy SSH keys
+# Copy SSH keys to new user
 copy_ssh_to_user() {
     print_section "🔑 Setting up User SSH Keys"
     
@@ -375,6 +267,6 @@ main() {
     fi
 }
 
-# Run the script
+# Run the script with error handling
 trap 'error "An error occurred. Check the output above for details."' ERR
 main "$@"
