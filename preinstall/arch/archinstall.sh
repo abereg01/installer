@@ -72,6 +72,132 @@ create_config() {
     
     progress "Creating configuration file"
 
+    # Export variables for Python
+    export INSTALL_GRAPHICS="$graphics"
+    export INSTALL_ROOT_DISK="$ROOT_DISK"
+    export INSTALL_HOSTNAME="$HOSTNAME"
+    export INSTALL_USERNAME="$USERNAME"
+    export INSTALL_PASSWORD="$USER_PASSWORD"
+    export INSTALL_ROOT_PASSWORD="$ROOT_PASSWORD"
+    export INSTALL_ROOT_PART="$ROOT_PART"
+    export INSTALL_HOME_PART="$HOME_PART"
+    export INSTALL_BOOT_PART="$BOOT_PART"
+    export INSTALL_BOOT_CHOICE="$BOOT_CHOICE"
+    export CONFIG_FILE="$config_file"
+
+python3 << EOF
+import json
+import os
+
+# Get variables from environment
+graphics = os.environ['INSTALL_GRAPHICS']
+root_disk = os.environ['INSTALL_ROOT_DISK']
+hostname = os.environ['INSTALL_HOSTNAME']
+username = os.environ['INSTALL_USERNAME']
+password = os.environ['INSTALL_PASSWORD']
+root_password = os.environ['INSTALL_ROOT_PASSWORD']
+root_part = os.environ['INSTALL_ROOT_PART']
+home_part = os.environ['INSTALL_HOME_PART']
+boot_part = os.environ['INSTALL_BOOT_PART']
+boot_choice = os.environ['INSTALL_BOOT_CHOICE']
+config_file = os.environ['CONFIG_FILE']
+
+config = {
+    "additional-repositories": ["multilib"],
+    "audio": "Pipewire",
+    "bootloader": "Grub",
+    "config_version": "2.5.1",
+    "debug": True,
+    "desktop-environment": None,
+    "gfx_driver": graphics,
+    "harddrives": [root_disk],
+    "hostname": hostname,
+    "kernels": ["linux"],
+    "keyboard-language": "us",
+    "mirror-region": {
+        "Sweden": {
+            "https://ftp.acc.umu.se/mirror/archlinux/\$repo/os/\$arch": True,
+            "https://ftp.lysator.liu.se/pub/archlinux/\$repo/os/\$arch": True,
+            "https://ftp.myrveln.se/pub/linux/archlinux/\$repo/os/\$arch": True
+        }
+    },
+    "mount_points": {
+        "/": {"device": root_part, "type": "btrfs", "subvolume": "@"},
+        "/home": {"device": home_part, "type": "btrfs"},
+        "/.snapshots": {"device": root_part, "type": "btrfs", "subvolume": "@snapshots"},
+        "/var/log": {"device": root_part, "type": "btrfs", "subvolume": "@log"},
+        "/var/cache": {"device": root_part, "type": "btrfs", "subvolume": "@cache"}
+    },
+    "network": {
+        "type": "NetworkManager",
+        "config_type": "nm"
+    },
+    "ntp": True,
+    "profile": None,
+    "packages": [
+        "git",
+        "vim",
+        "sudo",
+        "networkmanager",
+        "base-devel",
+        "linux-headers"
+    ],
+    "services": ["NetworkManager", "sshd"],
+    "sys-encoding": "utf-8",
+    "sys-language": "en_US",
+    "timezone": "Europe/Stockholm",
+    "swap": True,
+    "root-password": root_password,
+    "superusers": {
+        username: {
+            "password": password
+        }
+    },
+    "users": {
+        username: {
+            "sudo": True,
+            "password": password,
+            "shell": "/bin/bash"
+        }
+    },
+    "custom-commands": [
+        f"chown -R {username}:{username} /home/{username}",
+        "systemctl enable NetworkManager",
+        "systemctl enable sshd",
+        "pacman -Sy --noconfirm archlinux-keyring"
+    ]
+}
+
+if boot_choice == "yes":
+    config["mount_points"]["/boot"] = {"device": boot_part, "type": "ext4"}
+
+with open(config_file, "w") as f:
+    json.dump(config, f, indent=4)
+
+print(f"Configuration written to {config_file}")
+EOF
+
+    if [ $? -ne 0 ]; then
+        error "Failed to create configuration file"
+    fi
+
+    if [ ! -s "$config_file" ]; then
+        error "Configuration file is empty or missing"
+    fi
+    
+    success "Created installation configuration"
+    
+    echo -e "\n${CYAN}Configuration Preview (sensitive data hidden):${NC}"
+    grep -v "password" "$config_file" || true
+    echo
+}
+    print_section "📝 Creating Installation Configuration"
+    
+    config_file="${CONFIG_DIR}/archinstall.json"
+    graphics=$(detect_graphics)
+    
+    progress "Creating configuration file"
+
     # Export all necessary variables for Python
     export INSTALL_GRAPHICS="$graphics"
     export INSTALL_ROOT_DISK="$ROOT_DISK"
