@@ -140,39 +140,46 @@ config = {
             "https://ftp.myrveln.se/pub/linux/archlinux/\$repo/os/\$arch": True
         }
     },
-    "disk_config": {
-        "config_type": "manual",
+    "disk": {
         "device": root_disk,
+        "type": "manual",
         "partitions": [
             {
                 "mountpoint": "/",
-                "filesystem": "btrfs",
+                "type": "btrfs",
+                "start": "0%",
+                "size": "100%",
                 "device": root_part,
-                "options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@"]
+                "wipe": False,
+                "mount_options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@"]
             },
             {
                 "mountpoint": "/home",
-                "filesystem": "btrfs",
+                "type": "btrfs",
                 "device": home_part,
-                "options": ["compress=zstd", "space_cache=v2", "noatime"]
+                "wipe": False,
+                "mount_options": ["compress=zstd", "space_cache=v2", "noatime"]
             },
             {
                 "mountpoint": "/.snapshots",
-                "filesystem": "btrfs",
+                "type": "btrfs",
                 "device": root_part,
-                "options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@snapshots"]
+                "wipe": False,
+                "mount_options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@snapshots"]
             },
             {
                 "mountpoint": "/var/log",
-                "filesystem": "btrfs",
+                "type": "btrfs",
                 "device": root_part,
-                "options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@log"]
+                "wipe": False,
+                "mount_options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@log"]
             },
             {
                 "mountpoint": "/var/cache",
-                "filesystem": "btrfs",
+                "type": "btrfs",
                 "device": root_part,
-                "options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@cache"]
+                "wipe": False,
+                "mount_options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@cache"]
             }
         ]
     },
@@ -255,7 +262,7 @@ run_installation() {
     if ! archinstall \
         --config "${CONFIG_DIR}/archinstall.json" \
         --silent \
-        --use-manual-partitioning; then
+        --no-modify-bootloader; then
         error "Installation failed"
     fi
     success "Installation completed"
