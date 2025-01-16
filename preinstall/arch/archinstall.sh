@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 
-# Script version and configuration paths
+# Script version
 VERSION="1.0.0"
+
+# Configuration paths
 CONFIG_DIR="/root"
 INSTALL_CONFIG="${CONFIG_DIR}/install_config"
 DISK_CONFIG="${CONFIG_DIR}/disk_config.txt"
 
-# Colors and styling for better user feedback
+# Colors and styling
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
@@ -17,12 +19,12 @@ DIM='\033[2m'
 ITALIC='\033[3m'
 NC='\033[0m'
 
-# Unicode symbols for status indicators
+# Unicode symbols
 CHECK_MARK="\033[0;32m✓\033[0m"
 CROSS_MARK="\033[0;31m✗\033[0m"
 ARROW="→"
 
-# Helper functions for consistent output formatting
+# Helper functions
 progress() { echo -ne "${ITALIC}${DIM}$1...${NC}"; }
 success() { echo -e "\r${CHECK_MARK} $1"; }
 error() { echo -e "\r${CROSS_MARK} ${RED}ERROR:${NC} $1"; if [ "$2" != "no_exit" ]; then exit 1; fi; }
@@ -34,7 +36,24 @@ print_section() {
     echo -e "${DIM}$(printf '%.s─' $(seq 1 $(tput cols)))${NC}"
 }
 
-# Function to detect graphics hardware
+# Load configurations
+load_configs() {
+    print_section "📋 Loading Configurations"
+    
+    if [ ! -f "$INSTALL_CONFIG" ]; then
+        error "Installation configuration not found at $INSTALL_CONFIG"
+    fi
+    source "$INSTALL_CONFIG"
+    success "Loaded installation config"
+
+    if [ ! -f "$DISK_CONFIG" ]; then
+        error "Disk configuration not found at $DISK_CONFIG"
+    fi
+    source "$DISK_CONFIG"
+    success "Loaded disk config"
+}
+
+# Detect graphics hardware
 detect_graphics() {
     print_section "🔍 Detecting Graphics Hardware"
     
@@ -63,12 +82,12 @@ detect_graphics() {
     echo "$graphics"
 }
 
-# Function to create archinstall configuration
+# Create configuration
 create_config() {
     print_section "📝 Creating Installation Configuration"
     
-    config_file="${CONFIG_DIR}/archinstall.json"
-    graphics=$(detect_graphics)
+    local config_file="${CONFIG_DIR}/archinstall.json"
+    local graphics=$(detect_graphics)
     
     progress "Creating configuration file"
 
@@ -85,7 +104,7 @@ create_config() {
     export INSTALL_BOOT_CHOICE="$BOOT_CHOICE"
     export CONFIG_FILE="$config_file"
 
-python3 << EOF
+    python3 << "EndOfPython"
 import json
 import os
 
@@ -175,7 +194,7 @@ with open(config_file, "w") as f:
     json.dump(config, f, indent=4)
 
 print(f"Configuration written to {config_file}")
-EOF
+EndOfPython
 
     if [ $? -ne 0 ]; then
         error "Failed to create configuration file"
@@ -191,374 +210,8 @@ EOF
     grep -v "password" "$config_file" || true
     echo
 }
-    print_section "📝 Creating Installation Configuration"
-    
-    config_file="${CONFIG_DIR}/archinstall.json"
-    graphics=$(detect_graphics)
-    
-    progress "Creating configuration file"
 
-    # Export all necessary variables for Python
-    export INSTALL_GRAPHICS="$graphics"
-    export INSTALL_ROOT_DISK="$ROOT_DISK"
-    export INSTALL_HOSTNAME="$HOSTNAME"
-    export INSTALL_USERNAME="$USERNAME"
-    export INSTALL_PASSWORD="$USER_PASSWORD"
-    export INSTALL_ROOT_PASSWORD="$ROOT_PASSWORD"
-    export INSTALL_ROOT_PART="$ROOT_PART"
-    export INSTALL_HOME_PART="$HOME_PART"
-    export INSTALL_BOOT_PART="$BOOT_PART"
-    export INSTALL_BOOT_CHOICE="$BOOT_CHOICE"
-    export CONFIG_FILE="$config_file"
-
-    # Create Python script as a heredoc without indentation
-    cat << 'PYTHON_EOF' | python3
-import json
-import os
-
-# Get all our installation variables from environment
-graphics = os.environ['INSTALL_GRAPHICS']
-root_disk = os.environ['INSTALL_ROOT_DISK']
-hostname = os.environ['INSTALL_HOSTNAME']
-username = os.environ['INSTALL_USERNAME']
-password = os.environ['INSTALL_PASSWORD']
-root_password = os.environ['INSTALL_ROOT_PASSWORD']
-root_part = os.environ['INSTALL_ROOT_PART']
-home_part = os.environ['INSTALL_HOME_PART']
-boot_part = os.environ['INSTALL_BOOT_PART']
-boot_choice = os.environ['INSTALL_BOOT_CHOICE']
-config_file = os.environ['CONFIG_FILE']
-
-# Create the configuration dictionary
-config = {
-    "additional-repositories": ["multilib"],
-    "audio": "Pipewire",
-    "bootloader": "Grub",
-    "config_version": "2.5.1",
-    "debug": True,
-    "desktop-environment": None,
-    "gfx_driver": graphics,
-    "harddrives": [root_disk],
-    "hostname": hostname,
-    "kernels": ["linux"],
-    "keyboard-language": "us",
-    "mirror-region": {
-        "Sweden": {
-            "https://ftp.acc.umu.se/mirror/archlinux/$repo/os/$arch": True,
-            "https://ftp.lysator.liu.se/pub/archlinux/$repo/os/$arch": True,
-            "https://ftp.myrveln.se/pub/linux/archlinux/$repo/os/$arch": True
-        }
-    },
-    "mount_points": {
-        "/": {"device": root_part, "type": "btrfs", "subvolume": "@"},
-        "/home": {"device": home_part, "type": "btrfs"},
-        "/.snapshots": {"device": root_part, "type": "btrfs", "subvolume": "@snapshots"},
-        "/var/log": {"device": root_part, "type": "btrfs", "subvolume": "@log"},
-        "/var/cache": {"device": root_part, "type": "btrfs", "subvolume": "@cache"}
-    },
-    "network": {
-        "type": "NetworkManager",
-        "config_type": "nm"
-    },
-    "ntp": True,
-    "profile": None,
-    "packages": [
-        "git",
-        "vim",
-        "sudo",
-        "networkmanager",
-        "base-devel",
-        "linux-headers"
-    ],
-    "services": ["NetworkManager", "sshd"],
-    "sys-encoding": "utf-8",
-    "sys-language": "en_US",
-    "timezone": "Europe/Stockholm",
-    "swap": True,
-    "root-password": root_password,
-    "superusers": {
-        username: {
-            "password": password
-        }
-    },
-    "users": {
-        username: {
-            "sudo": True,
-            "password": password,
-            "shell": "/bin/bash"
-        }
-    },
-    "custom-commands": [
-        f"chown -R {username}:{username} /home/{username}",
-        "systemctl enable NetworkManager",
-        "systemctl enable sshd",
-        "pacman -Sy --noconfirm archlinux-keyring"
-    ]
-}
-
-# Add boot partition if needed
-if boot_choice == "yes":
-    config["mount_points"]["/boot"] = {"device": boot_part, "type": "ext4"}
-
-# Ensure the directory exists
-os.makedirs(os.path.dirname(config_file), exist_ok=True)
-
-# Write the configuration to file
-with open(config_file, "w") as f:
-    json.dump(config, f, indent=4)
-
-print(f"Configuration written to {config_file}")
-PYTHON_EOF
-
-    if [ $? -ne 0 ]; then
-        error "Failed to create configuration file"
-    fi
-
-    if [ ! -s "$config_file" ]; then
-        error "Configuration file is empty or missing"
-    fi
-    
-    success "Created installation configuration"
-    
-    # Show preview of configuration (excluding sensitive data)
-    echo -e "\n${CYAN}Configuration Preview (sensitive data hidden):${NC}"
-    grep -v "password" "$config_file" || true
-    echo
-}
-create_config() {
-    print_section "📝 Creating Installation Configuration"
-    
-    # These variables need to be inside the function
-    config_file="${CONFIG_DIR}/archinstall.json"
-    graphics=$(detect_graphics)
-    
-    # Export additional configuration for disks
-    export INSTALL_CONFIG_FILE="$config_file"
-    
-    progress "Creating configuration file"
-
-    # Create the configuration using Python
-    python3 - << 'EOF'
-import json
-import os
-
-# Get the configuration file path from environment
-config_file = os.environ['INSTALL_CONFIG_FILE']
-
-# Get all our installation variables from environment
-graphics = os.environ['INSTALL_GRAPHICS']
-root_disk = os.environ['INSTALL_ROOT_DISK']
-hostname = os.environ['INSTALL_HOSTNAME']
-username = os.environ['INSTALL_USERNAME']
-password = os.environ['INSTALL_PASSWORD']
-root_password = os.environ['ROOT_PASSWORD']
-root_part = os.environ['INSTALL_ROOT_PART']
-home_part = os.environ['INSTALL_HOME_PART']
-boot_part = os.environ['INSTALL_BOOT_PART']
-boot_choice = os.environ['INSTALL_BOOT_CHOICE']
-
-# Create a disk layout configuration
-disk_layout = {
-    "config_type": "manual",
-    "device": root_disk,
-    "partitions": [
-        {
-            "mountpoint": "/",
-            "filesystem": "btrfs",
-            "device": root_part,
-            "options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@"]
-        },
-        {
-            "mountpoint": "/home",
-            "filesystem": "btrfs",
-            "device": home_part,
-            "options": ["compress=zstd", "space_cache=v2", "noatime"]
-        }
-    ]
-}
-    python3 - << 'EOF'
-import json
-import os
-
-# Get the configuration file path from environment
-config_file = os.environ['CONFIG_FILE']
-
-# Get installation variables from environment
-graphics = os.environ['INSTALL_GRAPHICS']
-root_disk = os.environ['INSTALL_ROOT_DISK']
-hostname = os.environ['INSTALL_HOSTNAME']
-username = os.environ['INSTALL_USERNAME']
-password = os.environ['INSTALL_PASSWORD']
-root_part = os.environ['INSTALL_ROOT_PART']
-home_part = os.environ['INSTALL_HOME_PART']
-boot_part = os.environ['INSTALL_BOOT_PART']
-boot_choice = os.environ['INSTALL_BOOT_CHOICE']
-
-# Create the configuration dictionary
-config = {
-    "additional-repositories": ["multilib"],
-    "audio": "Pipewire",
-    "bootloader": "Grub",
-    "config_version": "2.5.1",
-    "debug": True,
-    "desktop-environment": None,
-    "gfx_driver": graphics,
-    "harddrives": [root_disk],
-    "hostname": hostname,
-    "kernels": ["linux"],
-    "keyboard-language": "us",
-    "mirror-region": {
-        "Sweden": {
-            "https://ftp.acc.umu.se/mirror/archlinux/$repo/os/$arch": True,
-            "https://ftp.lysator.liu.se/pub/archlinux/$repo/os/$arch": True,
-            "https://ftp.myrveln.se/pub/linux/archlinux/$repo/os/$arch": True
-        }
-    },
-    "mount_points": {
-        "/": {"device": root_part, "type": "btrfs", "subvolume": "@"},
-        "/home": {"device": home_part, "type": "btrfs"},
-        "/.snapshots": {"device": root_part, "type": "btrfs", "subvolume": "@snapshots"},
-        "/var/log": {"device": root_part, "type": "btrfs", "subvolume": "@log"},
-        "/var/cache": {"device": root_part, "type": "btrfs", "subvolume": "@cache"}
-    },
-    "network": {
-        "type": "NetworkManager",
-        "config_type": "nm"
-    },
-    "ntp": True,
-    "profile": None,
-    "packages": [
-        "git",
-        "vim",
-        "sudo",
-        "networkmanager",
-        "base-devel",
-        "linux-headers"
-    ],
-    "services": ["NetworkManager", "sshd"],
-    "sys-encoding": "utf-8",
-    "sys-language": "en_US",
-    "timezone": "Europe/Stockholm",
-    "swap": True,
-    "root-password": root_password,
-    "superusers": {
-        username: {
-            "password": password
-        }
-    },
-    "users": {
-        username: {
-            "sudo": True,
-            "password": password,
-            "shell": "/bin/bash"
-        }
-    },
-    "custom-commands": [
-        f"chown -R {username}:{username} /home/{username}",
-        "systemctl enable NetworkManager",
-        "systemctl enable sshd",
-        "pacman -Sy --noconfirm archlinux-keyring"
-    ]
-}
-    "config_version": "2.5.1",
-    "debug": True,
-    "desktop-environment": None,
-    "gfx_driver": graphics,
-    "harddrives": [root_disk],
-    "hostname": hostname,
-    "kernels": ["linux"],
-    "keyboard-language": "us",
-    "mirror-region": {
-        "Sweden": {
-            "https://ftp.acc.umu.se/mirror/archlinux/$repo/os/$arch": True,
-            "https://ftp.lysator.liu.se/pub/archlinux/$repo/os/$arch": True,
-            "https://ftp.myrveln.se/pub/linux/archlinux/$repo/os/$arch": True
-        }
-    },
-    "mount_points": {
-        "/": {"device": root_part, "type": "btrfs", "subvolume": "@"},
-        "/home": {"device": home_part, "type": "btrfs"},
-        "/.snapshots": {"device": root_part, "type": "btrfs", "subvolume": "@snapshots"},
-        "/var/log": {"device": root_part, "type": "btrfs", "subvolume": "@log"},
-        "/var/cache": {"device": root_part, "type": "btrfs", "subvolume": "@cache"}
-    },
-    "nic": {"type": "NetworkManager"},
-    "ntp": True,
-    "profile": None,
-    "packages": [
-        "git",
-        "vim",
-        "sudo",
-        "networkmanager",
-        "base-devel",
-        "linux-headers"
-    ],
-    "services": ["NetworkManager", "sshd"],
-    "sys-encoding": "utf-8",
-    "sys-language": "en_US",
-    "timezone": "Europe/Stockholm",
-    "swap": True,
-    # Add the root password configuration
-    "root-password": os.environ['ROOT_PASSWORD'],
-    # Update the user configuration format
-    "superusers": {
-        username: {
-            "password": password
-        }
-    },
-    "users": {
-        username: {
-            "sudo": True,
-            "password": password,
-            "shell": "/bin/bash"
-        }
-    },
-    "custom-commands": [
-        f"chown -R {username}:{username} /home/{username}",
-        "systemctl enable NetworkManager",
-        "systemctl enable sshd",
-        "pacman -Sy --noconfirm archlinux-keyring"
-    ]
-}
-    "custom-commands": [
-        f"chown -R {username}:{username} /home/{username}",
-        "systemctl enable NetworkManager",
-        "systemctl enable sshd",
-        "pacman -Sy --noconfirm archlinux-keyring"
-    ]
-}
-
-# Add boot partition if needed
-if boot_choice == "yes":
-    config["mount_points"]["/boot"] = {"device": boot_part, "type": "ext4"}
-
-# Ensure the directory exists
-os.makedirs(os.path.dirname(config_file), exist_ok=True)
-
-# Write the configuration to file
-with open(config_file, "w") as f:
-    json.dump(config, f, indent=4)
-
-print(f"Configuration written to {config_file}")
-EOF
-
-    if [ $? -ne 0 ]; then
-        error "Failed to create configuration file"
-    fi
-
-    if [ ! -s "$config_file" ]; then
-        error "Configuration file is empty or missing"
-    fi
-    
-    success "Created installation configuration"
-    
-    # Show preview of configuration (excluding sensitive data)
-    echo -e "\n${CYAN}Configuration Preview (sensitive data hidden):${NC}"
-    grep -v "password" "$config_file" || true
-    echo
-}
-
-# Function to run the actual installation
+# Run installation
 run_installation() {
     print_section "🚀 Running System Installation"
     
@@ -573,12 +226,12 @@ run_installation() {
     success "Installation completed"
 }
 
-# Function to copy SSH keys
+# Copy SSH keys
 copy_ssh_to_user() {
     print_section "🔑 Setting up User SSH Keys"
     
     if [ -d "/root/.ssh" ]; then
-        user_home="/mnt/home/$USERNAME"
+        local user_home="/mnt/home/$USERNAME"
         progress "Copying SSH keys to $USERNAME"
         mkdir -p "$user_home/.ssh"
         cp -r /root/.ssh/* "$user_home/.ssh/"
@@ -606,6 +259,6 @@ main() {
     fi
 }
 
-# Run the script with error handling
+# Run the script
 trap 'error "An error occurred. Check the output above for details."' ERR
 main "$@"
