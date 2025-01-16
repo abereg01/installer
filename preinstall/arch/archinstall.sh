@@ -140,6 +140,42 @@ config = {
             "https://ftp.myrveln.se/pub/linux/archlinux/\$repo/os/\$arch": True
         }
     },
+    "disk_config": {
+        "config_type": "manual",
+        "device": root_disk,
+        "partitions": [
+            {
+                "mountpoint": "/",
+                "filesystem": "btrfs",
+                "device": root_part,
+                "options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@"]
+            },
+            {
+                "mountpoint": "/home",
+                "filesystem": "btrfs",
+                "device": home_part,
+                "options": ["compress=zstd", "space_cache=v2", "noatime"]
+            },
+            {
+                "mountpoint": "/.snapshots",
+                "filesystem": "btrfs",
+                "device": root_part,
+                "options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@snapshots"]
+            },
+            {
+                "mountpoint": "/var/log",
+                "filesystem": "btrfs",
+                "device": root_part,
+                "options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@log"]
+            },
+            {
+                "mountpoint": "/var/cache",
+                "filesystem": "btrfs",
+                "device": root_part,
+                "options": ["compress=zstd", "space_cache=v2", "noatime", "subvol=@cache"]
+            }
+        ]
+    },
     "mount_points": {
         "/": {"device": root_part, "type": "btrfs", "subvolume": "@"},
         "/home": {"device": home_part, "type": "btrfs"},
@@ -219,8 +255,7 @@ run_installation() {
     if ! archinstall \
         --config "${CONFIG_DIR}/archinstall.json" \
         --silent \
-        --disk-layout manual \
-        --disk-encryption disable; then
+        --use-manual-partitioning; then
         error "Installation failed"
     fi
     success "Installation completed"
