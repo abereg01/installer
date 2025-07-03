@@ -22,7 +22,7 @@ dnf update -y
 
 # Install core tools
 echo "==> Installing core tools..."
-dnf install -y fish neovim git curl gcc wget unzip stow \
+dnf install -y fish neovim gcc \
     network-manager-applet blueman rofi dunst picom udiskie \
     polkit-gnome libnotify ripgrep
 
