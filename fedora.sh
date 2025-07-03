@@ -10,6 +10,12 @@ fi
 USER_NAME=$(logname)
 USER_HOME=$(eval echo ~$USER_NAME)
 
+# Check for pip before continuing
+if ! command -v pip3 &>/dev/null; then
+  echo "pip3 is required but not installed. Please install python3-pip manually and rerun the script."
+  exit 1
+fi
+
 # Improve DNF performance
 echo "==> Optimizing DNF..."
 grep -q '^max_parallel_downloads=' /etc/dnf/dnf.conf || echo 'max_parallel_downloads=10' >> /etc/dnf/dnf.conf
@@ -38,7 +44,7 @@ group_install_if_missing() {
 echo "==> Installing core tools..."
 install_if_missing fish neovim git curl gcc wget unzip \
     network-manager-applet blueman rofi dunst picom udiskie \
-    libnotify ripgrep feh ristretto ImageMagick
+    libnotify ripgrep feh ristretto ImageMagick python3-pip
 
 # Install pywal manually (fallback)
 echo "==> Installing pywal..."
@@ -46,7 +52,7 @@ sudo -u $USER_NAME python3 -m pip install --user pywal || true
 
 # Btrfs + Snapper setup
 echo "==> Setting up Btrfs Snapper..."
-install_if_missing btrfs-progs snapper snapper-gui
+install_if_missing btrfs-progs snapper
 
 echo "==> Installing grub-btrfs..."
 dnf copr enable -y kylegospo/grub-btrfs
@@ -54,34 +60,30 @@ install_if_missing grub-btrfs grub-btrfs-timeshift
 systemctl enable --now grub-btrfs.path
 
 snapper -c root create-config /
-systemctl enable --now snapper-timeline.timer snapper-cleanup.timer
+systemctl enable --now snapper-cleanup.timer
 
-# Configure snapper retention
-cat <<EOF > /etc/snapper/configs/root
-SUBVOLUME="/"
-FSTYPE="btrfs"
-ALLOW_USERS="$USER_NAME"
-TIMELINE_CREATE="yes"
-TIMELINE_CLEANUP="yes"
-TIMELINE_LIMIT_HOURLY="0"
-TIMELINE_LIMIT_DAILY="2"
-TIMELINE_LIMIT_WEEKLY="1"
-TIMELINE_LIMIT_MONTHLY="0"
-TIMELINE_LIMIT_YEARLY="0"
-NUMBER_CLEANUP="yes"
-NUMBER_MIN_AGE="1800"
-NUMBER_LIMIT="10"
+# Install btrfs-assistant
+install_if_missing btrfs-assistant python3-dnf-plugin-snapper libdnf5-plugin-actions
+
+# Configure dnf5 Snapper actions
+mkdir -p /etc/dnf/libdnf5-plugins/actions.d
+cat <<EOF > /etc/dnf/libdnf5-plugins/actions.d/snapper.actions
+# Get snapshot description
+pre_transaction::::/usr/bin/sh -c echo\ "tmp.cmd=\$(ps\ -o\ command\ --no-headers\ -p\ '\${pid}')"
+# Creates pre snapshot before the transaction and stores the snapshot number in the "tmp.snapper_pre_number"  variable.
+pre_transaction::::/usr/bin/sh -c echo\ "tmp.snapper_pre_number=\$(snapper\ create\ -t\ pre\ -p\ -d\ '\${tmp.cmd}')"
+
+# If the variable "tmp.snapper_pre_number" exists, it creates post snapshot after the transaction and removes the variable "tmp.snapper_pre_number".
+post_transaction::::/usr/bin/sh -c [\ -n\ "\${tmp.snapper_pre_number}"\ ]\ \&\&\ snapper\ create\ -t\ post\ --pre-number\ "\${tmp.snapper_pre_number}"\ -d\ "\${tmp.cmd}"\ \;\ echo\ tmp.snapper_pre_number\ \;\ echo\ tmp.cmd
 EOF
 
-# Force snapshot before reboot
+# Create final snapshot
 echo "==> Creating final snapshot before reboot..."
 snapper -c root create --description "Post-install snapshot"
 
-grub2-mkconfig -o /boot/efi/EFI/fedora/grub.cfg
-
 # Hyprland stack
 echo "==> Installing Hyprland + tools..."
-dnf copr enable -y zirix/hyprland || true
+dnf copr enable -y zirix/hyprland
 install_if_missing hyprland hyprpaper waybar kitty
 
 # BSPWM
@@ -92,7 +94,7 @@ install_if_missing bspwm sxhkd
 echo "==> Installing KDE Plasma..."
 group_install_if_missing "KDE Plasma Workspaces"
 
-# Display managers
+# Display manager
 echo "==> Installing SDDM display manager..."
 install_if_missing sddm
 dnf remove -y gdm || true
@@ -109,7 +111,7 @@ install_if_missing gnome-keyring gnome-control-center libinput-tools
 
 # Wallpaper daemon
 echo "==> Installing swww..."
-dnf copr enable -y lloydde/swww || true
+dnf copr enable -y lloydde/swww
 install_if_missing swww
 
 # Dev tools
@@ -119,35 +121,18 @@ install_if_missing docker-compose direnv npm docker kubernetes-client cargo
 systemctl enable --now docker
 usermod -aG docker $USER_NAME
 
-# Multimedia support + RPMFusion
+# Multimedia + RPMFusion
 echo "==> Enabling RPM Fusion + multimedia support..."
+install_if_missing fedora-workstation-repositories
 dnf install -y \
   https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
   https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
-
 group_install_if_missing Multimedia
 install_if_missing libavcodec-freeworld
 
-# Apps: SSH, filezilla, lazygit, remmina, vlc
-echo "==> Installing common apps..."
-install_if_missing openssh openssh-clients filezilla lazygit remmina vlc
-
-# Flatpak: Signal, Spotify
-echo "==> Installing Flatpak apps..."
-install_if_missing flatpak
-sudo -u $USER_NAME flatpak --user remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-sudo -u $USER_NAME flatpak --user install -y flathub org.signal.Signal
-sudo -u $USER_NAME flatpak install -y flathub com.spotify.Client
-
-# Google Chrome and LibreWolf
-echo "==> Installing Chrome and LibreWolf..."
-install_if_missing fedora-workstation-repositories
-sudo dnf config-manager --set-enabled google-chrome
-install_if_missing google-chrome-stable librewolf
-
 # Clone dotfiles
 echo "==> Cloning dotfiles..."
-sudo -u $USER_NAME git clone https://github.com/abereg01/dotfiles.git $USER_HOME/dotfiles || true
+sudo -u $USER_NAME git clone https://github.com/abereg01/dotfiles.git $USER_HOME/dotfiles
 
 # Symlink .config entries
 echo "==> Symlinking config files..."
@@ -161,50 +146,54 @@ chown -R $USER_NAME:$USER_NAME $USER_HOME/.config
 # Set user-dirs.dirs
 echo "==> Setting user directories..."
 cat <<EOF > $USER_HOME/.config/user-dirs.dirs
-XDG_DESKTOP_DIR=\"$USER_HOME/\"
-XDG_DOWNLOAD_DIR=\"$USER_HOME/dls/\"
-XDG_TEMPLATES_DIR=\"$USER_HOME/lib/\"
-XDG_PUBLICSHARE_DIR=\"$USER_HOME/lib/\"
-XDG_DOCUMENTS_DIR=\"$USER_HOME/lib/\"
-XDG_MUSIC_DIR=\"$USER_HOME/lib/\"
-XDG_PICTURES_DIR=\"$USER_HOME/lib/images/\"
-XDG_VIDEOS_DIR=\"$USER_HOME/lib/\"
+XDG_DESKTOP_DIR="$USER_HOME/"
+XDG_DOWNLOAD_DIR="$USER_HOME/dls/"
+XDG_TEMPLATES_DIR="$USER_HOME/lib/"
+XDG_PUBLICSHARE_DIR="$USER_HOME/lib/"
+XDG_DOCUMENTS_DIR="$USER_HOME/lib/"
+XDG_MUSIC_DIR="$USER_HOME/lib/"
+XDG_PICTURES_DIR="$USER_HOME/lib/images/"
+XDG_VIDEOS_DIR="$USER_HOME/lib/"
 EOF
 chown $USER_NAME:$USER_NAME $USER_HOME/.config/user-dirs.dirs
 
-# Install starship manually
+# Install starship
+echo "==> Installing starship..."
 sudo -u $USER_NAME sh -c "curl -sS https://starship.rs/install.sh | sh -s -- -y"
 
 # Build and install eza from source
 echo "==> Building eza from source..."
-sudo -u $USER_NAME git clone https://github.com/eza-community/eza.git $USER_HOME/eza || true
+sudo -u $USER_NAME git clone https://github.com/eza-community/eza.git $USER_HOME/eza
 cd $USER_HOME/eza
 sudo -u $USER_NAME cargo install --path .
 cd ..
 rm -rf $USER_HOME/eza
 
-# SSH key generation for GitHub
-if [ ! -f "$USER_HOME/.ssh/id_ed25519" ]; then
-  echo "==> Generating SSH key for GitHub (ed25519)..."
-  sudo -u $USER_NAME ssh-keygen -t ed25519 -C "$USER_NAME@$(hostname)"
-  eval "$(ssh-agent -s)"
-  ssh-add "$USER_HOME/.ssh/id_ed25519"
-  echo "SSH key generated. Add the following to your GitHub account:"
-  cat "$USER_HOME/.ssh/id_ed25519.pub"
-  read -p "Press enter when you've added the key to GitHub..."
-fi
+# Additional tools
+echo "==> Installing misc apps..."
+install_if_missing filezilla lazygit remmina vlc flatpak
+sudo -u $USER_NAME flatpak --user remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+sudo -u $USER_NAME flatpak --user install -y flathub org.signal.Signal
+flatpak install -y flathub com.spotify.Client
+dnf install -y google-chrome-stable
+install_if_missing librewolf
+
+# SSH keygen
+echo "==> Generating SSH key for GitHub... (ed25519)"
+sudo -u $USER_NAME ssh-keygen -t ed25519 -C "$USER_NAME@$(hostname)" -f "$USER_HOME/.ssh/id_ed25519" -N ""
+eval "$(ssh-agent -s)"
+ssh-add "$USER_HOME/.ssh/id_ed25519"
 
 # Final touches
-echo "==> Final system tweaks..."
+echo "==> Finalizing setup..."
 usermod -aG wheel $USER_NAME
 chsh -s /usr/bin/fish $USER_NAME
 
-# Final message
-echo "==> Setup complete."
 echo
-read -p "Login Screen (SDDM): Search and install \"Eucalyptus Drop\" theme via 'Get New Theme'. Do you want to reboot now? [y/N]: " reboot_answer
+read -p "Login Screen (SDDM): Search and install 'Eucalyptus Drop' theme via 'Get New Theme'. Reboot now? [y/N]: " reboot_answer
 if [[ "$reboot_answer" =~ ^[Yy]$ ]]; then
   reboot
 else
   echo "Reboot later to finish setup."
 fi
+

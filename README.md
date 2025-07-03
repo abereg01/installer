@@ -42,21 +42,6 @@
 - 💾 USB drive with SSH keys
 - 👑 Sudo privileges
 
-### 📂 USB Structure
-```
-📁 /path/to/usb/
-└── 📁 secure/
-    └── 📁 .ssh/
-        ├── 📄 agent.env
-        ├── 📄 config
-        ├── 🔑 id_ed25519_arch
-        ├── 🔑 id_ed25519_arch.pub
-        ├── 🔑 id_ed25519_work
-        ├── 🔑 id_ed25519_work.pub
-        ├── 📄 known_hosts
-        └── 📄 known_hosts.old
-```
-
 ## 🚀 Installation
 
 1. Clone with SSH for push access:
@@ -99,26 +84,9 @@ chmod +x install.sh
 
 ## 📁 Final Directory Structure
 
-```
-🏠 $HOME/
-├── 📁 .config/           # Configuration files
-├── 📁 dotfiles/         # Your dotfiles
-├── 📁 lib/
-│   ├── 📁 scripts/     # System scripts
-│   └── 📁 images/      # Wallpapers
-└── 📁 .themes/         # Theme files
-```
-
 ## 🔧 Troubleshooting
 
 ### 🚨 Common Issues
-
-#### 🔑 SSH Problems
-```bash
-# Fix permissions
-chmod 600 ~/.ssh/id_*
-chmod 644 ~/.ssh/*.pub
-```
 
 #### 🔄 Service Issues
 ```bash
