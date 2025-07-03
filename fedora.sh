@@ -24,7 +24,7 @@ dnf update -y
 echo "==> Installing core tools..."
 dnf install -y fish neovim gcc \
     network-manager-applet blueman rofi dunst picom udiskie \
-    polkit-gnome ripgrep
+    ripgrep
 
 # Install pywal for ricing
 echo "==> Installing pywal..."
