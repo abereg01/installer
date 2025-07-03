@@ -12,27 +12,41 @@ USER_HOME=$(eval echo ~$USER_NAME)
 
 # Improve DNF performance
 echo "==> Optimizing DNF..."
-cat <<EOF >> /etc/dnf/dnf.conf
-max_parallel_downloads=10
-fastestmirror=True
-EOF
+grep -q '^max_parallel_downloads=' /etc/dnf/dnf.conf || echo 'max_parallel_downloads=10' >> /etc/dnf/dnf.conf
+grep -q '^fastestmirror=' /etc/dnf/dnf.conf || echo 'fastestmirror=True' >> /etc/dnf/dnf.conf
 
 echo "==> Updating system..."
 dnf update -y
 
+install_if_missing() {
+  for pkg in "$@"; do
+    if ! rpm -q $pkg &>/dev/null; then
+      dnf install -y $pkg
+    fi
+  done
+}
+
+group_install_if_missing() {
+  for group in "$@"; do
+    if ! dnf group list installed | grep -q "$group"; then
+      dnf groupinstall -y "$group"
+    fi
+  done
+}
+
 # Install core tools
 echo "==> Installing core tools..."
-dnf install -y fish neovim git curl gcc wget unzip stow \
+install_if_missing fish neovim git curl gcc wget unzip stow \
     network-manager-applet blueman rofi dunst picom udiskie \
-    polkit-gnome libnotify ripgrep feh ristretto imagemagick
+    polkit-gnome libnotify ripgrep feh ristretto ImageMagick
 
 # Install pywal manually (fallback)
 echo "==> Installing pywal..."
-sudo -u $USER_NAME python3 -m pip install --user pywal
+sudo -u $USER_NAME python3 -m pip install --user pywal || true
 
 # Btrfs + Snapper setup
 echo "==> Setting up Btrfs Snapper..."
-dnf install -y btrfs-progs snapper grub-btrfs snapper-gui
+install_if_missing btrfs-progs snapper grub-btrfs snapper-gui
 snapper -c root create-config /
 systemctl enable --now snapper-timeline.timer snapper-cleanup.timer
 
@@ -61,40 +75,40 @@ grub2-mkconfig -o /boot/efi/EFI/fedora/grub.cfg
 
 # Hyprland stack
 echo "==> Installing Hyprland + tools..."
-dnf copr enable -y zirix/hyprland
-dnf install -y hyprland hyprpaper waybar kitty
+dnf copr enable -y zirix/hyprland || true
+install_if_missing hyprland hyprpaper waybar kitty
 
 # BSPWM
 echo "==> Installing BSPWM + sxhkd..."
-dnf install -y bspwm sxhkd
+install_if_missing bspwm sxhkd
 
 # KDE Plasma (optional)
 echo "==> Installing KDE Plasma..."
-dnf groupinstall -y "KDE Plasma Workspaces"
+group_install_if_missing "KDE Plasma Workspaces"
 
 # Display managers
 echo "==> Installing SDDM display manager..."
-dnf install -y sddm
+install_if_missing sddm
 systemctl enable sddm --now
 
 # AD and Evolution
 echo "==> Installing AD + Evolution..."
-dnf install -y realmd sssd adcli oddjob oddjob-mkhomedir samba-common-tools \
+install_if_missing realmd sssd adcli oddjob oddjob-mkhomedir samba-common-tools \
     evolution evolution-ews
 
 # Libinput + gestures support
 echo "==> Installing input/gesture support..."
-dnf install -y gnome-keyring gnome-control-center libinput-tools
+install_if_missing gnome-keyring gnome-control-center libinput-tools
 
 # Wallpaper daemon
 echo "==> Installing swww..."
-dnf copr enable -y lloydde/swww
-dnf install -y swww
+dnf copr enable -y lloydde/swww || true
+install_if_missing swww
 
 # Dev tools
 echo "==> Installing dev tools..."
-dnf groupinstall -y "Development Tools"
-dnf install -y docker-compose direnv npm docker kubernetes-client cargo
+group_install_if_missing "Development Tools"
+install_if_missing docker-compose direnv npm docker kubernetes-client cargo
 systemctl enable --now docker
 usermod -aG docker $USER_NAME
 
@@ -104,29 +118,29 @@ dnf install -y \
   https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
   https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
 
-dnf group install -y Multimedia
-dnf install -y libavcodec-freeworld
+group_install_if_missing Multimedia
+install_if_missing libavcodec-freeworld
 
 # Apps: SSH, filezilla, lazygit, remmina, vlc
 echo "==> Installing common apps..."
-dnf install -y openssh openssh-clients filezilla lazygit remmina vlc
+install_if_missing openssh openssh-clients filezilla lazygit remmina vlc
 
 # Flatpak: Signal, Spotify
 echo "==> Installing Flatpak apps..."
-dnf install -y flatpak
+install_if_missing flatpak
 sudo -u $USER_NAME flatpak --user remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 sudo -u $USER_NAME flatpak --user install -y flathub org.signal.Signal
 sudo -u $USER_NAME flatpak install -y flathub com.spotify.Client
 
 # Google Chrome and LibreWolf
 echo "==> Installing Chrome and LibreWolf..."
-dnf install -y fedora-workstation-repositories
-dnf config-manager --set-enabled google-chrome
-dnf install -y google-chrome-stable librewolf
+install_if_missing fedora-workstation-repositories
+sudo dnf config-manager --set-enabled google-chrome
+install_if_missing google-chrome-stable librewolf
 
 # Clone dotfiles
 echo "==> Cloning dotfiles..."
-sudo -u $USER_NAME git clone https://github.com/abereg01/dotfiles.git $USER_HOME/dotfiles
+sudo -u $USER_NAME git clone https://github.com/abereg01/dotfiles.git $USER_HOME/dotfiles || true
 
 # Symlink .config entries
 echo "==> Symlinking config files..."
@@ -156,7 +170,7 @@ sudo -u $USER_NAME sh -c "curl -sS https://starship.rs/install.sh | sh -s -- -y"
 
 # Build and install eza from source
 echo "==> Building eza from source..."
-sudo -u $USER_NAME git clone https://github.com/eza-community/eza.git $USER_HOME/eza
+sudo -u $USER_NAME git clone https://github.com/eza-community/eza.git $USER_HOME/eza || true
 cd $USER_HOME/eza
 sudo -u $USER_NAME cargo install --path .
 cd ..
@@ -187,4 +201,3 @@ if [[ "$reboot_answer" =~ ^[Yy]$ ]]; then
 else
   echo "Reboot later to finish setup."
 fi
-
