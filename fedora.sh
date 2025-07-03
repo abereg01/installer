@@ -36,9 +36,9 @@ group_install_if_missing() {
 
 # Install core tools
 echo "==> Installing core tools..."
-install_if_missing fish neovim git curl gcc wget unzip stow \
+install_if_missing fish neovim git curl gcc wget unzip \
     network-manager-applet blueman rofi dunst picom udiskie \
-    polkit-gnome libnotify ripgrep feh ristretto ImageMagick
+    libnotify ripgrep feh ristretto ImageMagick
 
 # Install pywal manually (fallback)
 echo "==> Installing pywal..."
@@ -46,7 +46,13 @@ sudo -u $USER_NAME python3 -m pip install --user pywal || true
 
 # Btrfs + Snapper setup
 echo "==> Setting up Btrfs Snapper..."
-install_if_missing btrfs-progs snapper grub-btrfs snapper-gui
+install_if_missing btrfs-progs snapper snapper-gui
+
+echo "==> Installing grub-btrfs..."
+dnf copr enable -y kylegospo/grub-btrfs
+install_if_missing grub-btrfs grub-btrfs-timeshift
+systemctl enable --now grub-btrfs.path
+
 snapper -c root create-config /
 systemctl enable --now snapper-timeline.timer snapper-cleanup.timer
 
@@ -89,6 +95,7 @@ group_install_if_missing "KDE Plasma Workspaces"
 # Display managers
 echo "==> Installing SDDM display manager..."
 install_if_missing sddm
+dnf remove -y gdm || true
 systemctl enable sddm --now
 
 # AD and Evolution
