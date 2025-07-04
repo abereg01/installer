@@ -62,7 +62,14 @@ install_if_missing btrfs-progs snapper
 
 echo "==> Installing grub-btrfs..."
 dnf copr enable -y kylegospo/grub-btrfs
-install_if_missing grub-btrfs grub-btrfs-timeshift
+
+# Remove timeshift version if present (they conflict)
+if rpm -q grub-btrfs-timeshift &>/dev/null; then
+  echo "Removing grub-btrfs-timeshift to avoid conflict..."
+  dnf remove -y grub-btrfs-timeshift
+fi
+
+install_if_missing grub-btrfs
 systemctl enable --now grub-btrfs.path
 
 snapper -c root create-config /
