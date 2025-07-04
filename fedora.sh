@@ -71,9 +71,9 @@ echo "==> Ensuring .snapshots subvolume exists..."
 SNAPSHOT_MOUNTPOINT="/.snapshots"
 if [ ! -d "$SNAPSHOT_MOUNTPOINT" ]; then
   mkdir -p "$SNAPSHOT_MOUNTPOINT"
-  mountpoint=$(findmnt -n -o SOURCE /)
-  btrfs subvolume create /@snapshots || true
-  echo "$mountpoint /.snapshots btrfs subvol=@snapshots,defaults 0 0" >> /etc/fstab
+  ROOT_PART=$(findmnt -n -o SOURCE /)
+  btrfs subvolume create /.snapshots || true
+  echo "$ROOT_PART /.snapshots btrfs subvol=.snapshots,defaults 0 0" >> /etc/fstab
   mount /.snapshots
 fi
 
@@ -98,6 +98,9 @@ EOF
 # Create final snapshot
 echo "==> Creating final snapshot before reboot..."
 snapper -c root create --description "Post-install snapshot"
+
+# Remaining install steps follow unchanged...
+
 
 # Finish
 echo "==> Fedora Setup Complete."
