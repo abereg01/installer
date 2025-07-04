@@ -69,7 +69,13 @@ sudo -u $USER_NAME python3 -m pip install --user pywal || true
 # Btrfs Snapper
 echo "==> Setting up Btrfs Snapper..."
 install_if_missing btrfs-progs snapper
-snapper -c root create-config /
+
+if [ ! -f /etc/snapper/configs/root ]; then
+  snapper -c root create-config /
+else
+  echo "Snapper config already exists, skipping..."
+fi
+
 systemctl enable --now snapper-cleanup.timer
 
 # grub-btrfs
