@@ -14,12 +14,6 @@ fi
 USER_NAME=$(logname)
 USER_HOME=$(eval echo ~$USER_NAME)
 
-# Check for pip before continuing
-if ! command -v pip3 &>/dev/null; then
-  echo "pip3 is required but not installed. Please install python3-pip manually and rerun the script."
-  exit 1
-fi
-
 # Improve DNF performance
 echo "==> Optimizing DNF..."
 grep -q '^max_parallel_downloads=' /etc/dnf/dnf.conf || echo 'max_parallel_downloads=10' >> /etc/dnf/dnf.conf
@@ -30,8 +24,11 @@ dnf update -y
 
 install_if_missing() {
   for pkg in "$@"; do
-    if ! rpm -q $pkg &>/dev/null; then
-      dnf install -y $pkg
+    if ! rpm -q "$pkg" &>/dev/null; then
+      echo "--> Installing $pkg..."
+      dnf install -y "$pkg"
+    else
+      echo "--> Skipping $pkg (already installed)"
     fi
   done
 }
@@ -39,25 +36,34 @@ install_if_missing() {
 group_install_if_missing() {
   for group in "$@"; do
     if ! dnf group list installed | grep -q "$group"; then
+      echo "--> Installing group $group..."
       dnf groupinstall -y "$group"
+    else
+      echo "--> Skipping group $group (already installed)"
     fi
   done
 }
 
-# Install core tools
+# Core tools (ensure pip is installed early)
 echo "==> Installing core tools..."
-install_if_missing fish neovim git curl gcc wget unzip \
-    network-manager-applet blueman rofi dunst picom udiskie \
-    libnotify ripgrep feh ristretto ImageMagick python3-pip
+install_if_missing python3-pip fish neovim git curl gcc wget unzip \
+  network-manager-applet blueman rofi dunst picom udiskie \
+  libnotify ripgrep feh ristretto ImageMagick
+
+# Confirm pip is working
+echo "==> Verifying pip3..."
+if ! python3 -m pip --version &>/dev/null; then
+  echo "❌ pip3 is installed but not functioning. Please fix manually before continuing."
+  exit 1
+fi
 
 # Install pywal manually (fallback)
 echo "==> Installing pywal..."
-sudo -u $USER_NAME python3 -m pip install --user pywal || true
+sudo -u "$USER_NAME" python3 -m pip install --user pywal || true
 
 # Btrfs + Snapper setup
 echo "==> Setting up Btrfs Snapper..."
 install_if_missing btrfs-progs snapper
-
 snapper -c root create-config /
 systemctl enable --now snapper-cleanup.timer
 
@@ -66,10 +72,10 @@ echo "==> Installing grub-btrfs..."
 dnf copr enable -y kylegospo/grub-btrfs
 install_if_missing grub-btrfs
 
-# Ensure .snapshots mount exists
+# Create .snapshots subvolume if needed
 echo "==> Ensuring .snapshots subvolume exists..."
 SNAPSHOT_MOUNTPOINT="/.snapshots"
-if [ ! -d "$SNAPSHOT_MOUNTPOINT" ]; then
+if ! grep -q "/.snapshots" /etc/fstab; then
   mkdir -p "$SNAPSHOT_MOUNTPOINT"
   ROOT_PART=$(findmnt -n -o SOURCE /)
   btrfs subvolume create /.snapshots || true
@@ -77,8 +83,9 @@ if [ ! -d "$SNAPSHOT_MOUNTPOINT" ]; then
   mount /.snapshots
 fi
 
+# Enable grub-btrfs.path
 echo "==> Enabling grub-btrfs.path..."
-systemctl enable --now grub-btrfs.path
+systemctl enable --now grub-btrfs.path || echo "⚠️ grub-btrfs.path could not be started (possibly missing .snapshots mount)"
 
 # Install btrfs-assistant and dnf5 plugin
 install_if_missing btrfs-assistant python3-dnf-plugin-snapper libdnf5-plugin-actions
@@ -95,13 +102,10 @@ pre_transaction::::/usr/bin/sh -c echo\ "tmp.snapper_pre_number=\$(snapper\ crea
 post_transaction::::/usr/bin/sh -c [\ -n\ "\${tmp.snapper_pre_number}"\ ]\ \&\&\ snapper\ create\ -t\ post\ --pre-number\ "\${tmp.snapper_pre_number}"\ -d\ "\${tmp.cmd}"\ \;\ echo\ tmp.snapper_pre_number\ \;\ echo\ tmp.cmd
 EOF
 
-# Create final snapshot
+# Final snapshot
 echo "==> Creating final snapshot before reboot..."
 snapper -c root create --description "Post-install snapshot"
 
-# Remaining install steps follow unchanged...
-
-
-# Finish
-echo "==> Fedora Setup Complete."
-echo "Check log at: $LOG_FILE"
+echo
+echo "✅ Setup phase complete. Check log: $LOG_FILE"
+echo "👉 Reboot when ready, or continue with user-level setup."
